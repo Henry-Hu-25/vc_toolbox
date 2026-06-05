@@ -26,36 +26,54 @@ def _build_sources_block(items: list[dict[str, str]]) -> str:
     return "\n".join(lines).strip() or "(no sources gathered)"
 
 
-def _gather_sources(raw_input: str, input_type: str) -> list[dict[str, str]]:
+def _gather_sources(raw_input: str, input_type: str) -> tuple[list[dict[str, str]], int, int]:
+    """Return (deduped_sources, search_invocations, extract_invocations).
+
+    search_invocations counts how many times ``search_tool.search()`` was
+    called (each call is one Tavily API invocation).  extract_invocations
+    counts ``search_tool.extract()`` calls.  These are used for accurate
+    cost accounting -- the deduped source list must NOT be used as a
+    proxy for API call count.
+    """
+    search_invocations = 0
+    extract_invocations = 0
     items: list[dict[str, str]] = []
     if input_type == "url":
         url = ensure_scheme(raw_input)
         extracted = search_tool.extract(url)
+        extract_invocations += 1
         if extracted and extracted.content:
             items.append(
                 {"title": "Company homepage", "url": extracted.url, "content": extracted.content}
             )
         for r in search_tool.search(f"{raw_input} company overview", max_results=3):
             items.append({"title": r.title, "url": r.url, "content": r.content})
+        search_invocations += 1
     elif input_type == "linkedin_company":
         slug = raw_input.rstrip("/").split("/company/")[-1].split("/")[0]
         for r in search_tool.search(
             f"site:linkedin.com/company {slug}", max_results=3
         ):
             items.append({"title": r.title, "url": r.url, "content": r.content})
+        search_invocations += 1
         for r in search_tool.search(f"{slug} official website", max_results=3):
             items.append({"title": r.title, "url": r.url, "content": r.content})
+        search_invocations += 1
     else:  # free-text name
         for r in search_tool.search(
             f"{raw_input} startup official website", max_results=4
         ):
             items.append({"title": r.title, "url": r.url, "content": r.content})
+        search_invocations += 1
         for r in search_tool.search(f"{raw_input} company about", max_results=3):
             items.append({"title": r.title, "url": r.url, "content": r.content})
+        search_invocations += 1
         for r in search_tool.search(f'"{raw_input}" founded year', max_results=3):
             items.append({"title": r.title, "url": r.url, "content": r.content})
+        search_invocations += 1
         for r in search_tool.search(f'"{raw_input}" headquarters location', max_results=3):
             items.append({"title": r.title, "url": r.url, "content": r.content})
+        search_invocations += 1
     # Dedupe by url
     seen: set[str] = set()
     deduped: list[dict[str, str]] = []
@@ -65,7 +83,7 @@ def _gather_sources(raw_input: str, input_type: str) -> list[dict[str, str]]:
             continue
         seen.add(u)
         deduped.append(item)
-    return deduped
+    return deduped, search_invocations, extract_invocations
 
 
 def run(state: AnalyzerState) -> dict[str, Any]:
@@ -78,10 +96,10 @@ def run(state: AnalyzerState) -> dict[str, Any]:
         }
 
     input_type = detect_input_type(raw_input)
-    sources = _gather_sources(raw_input, input_type)
+    sources, search_invocations, extract_invocations = _gather_sources(raw_input, input_type)
     cost = CostLedger(
-        tavily_searches=sum(1 for _ in sources if _.get("url")),
-        tavily_extracts=1 if input_type == "url" else 0,
+        tavily_searches=search_invocations,
+        tavily_extracts=extract_invocations,
     )
     prior_llm_calls = (state.get("cost") or CostLedger()).llm_calls
 
