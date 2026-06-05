@@ -1,0 +1,129 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --radius: 12px;
+
+  --bg: 0 0% 99%;
+  --fg: 240 10% 8%;
+  --muted: 240 5% 96%;
+  --muted-fg: 240 4% 42%;
+  --card: 0 0% 100%;
+  --card-fg: 240 10% 8%;
+  --border: 240 6% 90%;
+  --ring: 262 83% 58%;
+  --primary: 262 83% 58%;
+  --primary-fg: 0 0% 100%;
+
+  --tier-strong: 158 64% 42%;
+  --tier-promising: 217 91% 60%;
+  --tier-mixed: 38 92% 50%;
+  --tier-weak: 0 72% 51%;
+
+  --font-sans: "Geist", "Inter", system-ui;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+}
+
+.dark {
+  --bg: 240 10% 4%;
+  --fg: 0 0% 98%;
+  --muted: 240 4% 12%;
+  --muted-fg: 240 5% 65%;
+  --card: 240 8% 8%;
+  --card-fg: 0 0% 98%;
+  --border: 240 6% 18%;
+  --ring: 262 83% 70%;
+  --primary: 262 83% 68%;
+  --primary-fg: 240 10% 4%;
+
+  --tier-strong: 158 64% 52%;
+  --tier-promising: 217 91% 68%;
+  --tier-mixed: 38 92% 58%;
+  --tier-weak: 0 72% 60%;
+}
+
+html,
+body {
+  background-color: hsl(var(--bg));
+  color: hsl(var(--fg));
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+::selection {
+  background: hsl(var(--primary) / 0.25);
+  color: hsl(var(--fg));
+}
+
+/* Markdown report styling */
+.prose-report {
+  @apply text-[15px] leading-7;
+}
+.prose-report h1 {
+  @apply text-3xl font-semibold tracking-tight mt-8 mb-4;
+}
+.prose-report h2 {
+  @apply text-xl font-semibold tracking-tight mt-8 mb-3 border-b border-border pb-2;
+}
+.prose-report h3 {
+  @apply text-base font-semibold tracking-tight mt-6 mb-2;
+}
+.prose-report p {
+  @apply my-3 text-muted-fg;
+}
+.prose-report ul {
+  @apply list-disc pl-6 space-y-1 my-3;
+}
+.prose-report ol {
+  @apply list-decimal pl-6 space-y-1 my-3;
+}
+.prose-report code {
+  @apply font-mono text-[13px] bg-muted px-1.5 py-0.5 rounded;
+}
+.prose-report pre {
+  @apply font-mono text-[13px] bg-muted p-4 rounded-md overflow-x-auto;
+}
+.prose-report a {
+  @apply text-primary underline-offset-4 hover:underline break-all;
+}
+.prose-report table {
+  @apply w-full text-sm my-4 border-collapse;
+}
+.prose-report th,
+.prose-report td {
+  @apply border border-border px-3 py-2 text-left align-top;
+}
+.prose-report th {
+  @apply bg-muted font-medium text-fg;
+}
+.prose-report blockquote {
+  @apply border-l-2 border-primary pl-4 italic text-muted-fg;
+}
+.prose-report em {
+  @apply text-muted-fg;
+}
+
+/* Skeleton shimmer for loading states */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 0%,
+    hsl(var(--border)) 50%,
+    hsl(var(--muted)) 100%
+  );
+  background-size: 200% 100%;
+  @apply animate-shimmer rounded-md;
+}
+
+/* Focus ring */
+:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+  border-radius: 6px;
+}
