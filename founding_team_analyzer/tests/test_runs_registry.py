@@ -150,16 +150,19 @@ async def test_cancel_marks_cancelled_and_cancels_task():
     task = asyncio.create_task(worker())
     reg.attach_task(rec.id, task)
     await started.wait()
-    ok = await reg.cancel(rec.id)
+    ok = reg.cancel(rec.id)
     assert ok is True
     assert rec.status == "cancelled"
+    # cancel() is now non-blocking; the task may need a moment to
+    # process CancelledError.  Give it a brief window.
+    await asyncio.sleep(0.05)
     assert task.cancelled() or task.done()
 
 
 @pytest.mark.asyncio
 async def test_cancel_unknown_returns_false():
     reg = RunRegistry()
-    assert await reg.cancel("nope") is False
+    assert reg.cancel("nope") is False
 
 
 @pytest.mark.asyncio

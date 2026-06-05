@@ -64,9 +64,15 @@ class RunRegistry:
 
     # ----- lifecycle -----
 
-    def create(self, input: str) -> RunRecord:
-        run_id = str(uuid.uuid4())
-        record = RunRecord(id=run_id, input=input)
+    def create(
+        self,
+        input: str,
+        task: Optional[asyncio.Task] = None,
+        run_id: Optional[str] = None,
+    ) -> RunRecord:
+        if run_id is None:
+            run_id = str(uuid.uuid4())
+        record = RunRecord(id=run_id, input=input, task=task)
         self._runs[run_id] = record
         return record
 
@@ -83,6 +89,10 @@ class RunRegistry:
         rec = self._runs.get(run_id)
         if rec is not None:
             rec.task = task
+            # If the run was already cancelled before the task was attached,
+            # cancel the task immediately so it doesn't run to completion.
+            if rec.status in TERMINAL_STATUSES and not task.done():
+                task.cancel()
 
     # ----- pub/sub -----
 
@@ -177,11 +187,17 @@ class RunRegistry:
             if queue in rec.subscribers:
                 rec.subscribers.remove(queue)
 
-    async def cancel(self, run_id: str) -> bool:
+    def cancel(self, run_id: str) -> bool:
         """Cancel the underlying task (if any) and mark the run cancelled.
 
         Returns True if a run was found and a cancellation initiated,
         False if the run is unknown or already terminal.
+
+        This method is **non-blocking**: it calls task.cancel() and
+        marks the run cancelled immediately, without awaiting the task.
+        The worker coroutine will handle CancelledError asynchronously
+        and finalize any cleanup (mark_cancelled from the worker is a
+        no-op since the status is already terminal).
         """
         rec = self._runs.get(run_id)
         if rec is None or rec.status in TERMINAL_STATUSES:
@@ -189,10 +205,6 @@ class RunRegistry:
         task = rec.task
         if task is not None and not task.done():
             task.cancel()
-            try:
-                await task
-            except (asyncio.CancelledError, Exception):
-                pass
         self.mark_cancelled(run_id)
         return True
 

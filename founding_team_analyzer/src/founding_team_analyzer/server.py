@@ -176,11 +176,14 @@ def create_app() -> FastAPI:
         if not s.openai_api_key or not s.tavily_api_key:
             raise HTTPException(status_code=503, detail="API keys not configured.")
 
-        record = REGISTRY.create(req.input)
+        # Create the task and record atomically so there is no window
+        # between create_task and attach_task where a cancel could miss
+        # the task reference.
+        run_id = str(uuid.uuid4())
         task = asyncio.create_task(
-            _execute_run(record.id, req.input, req.no_self_critique)
+            _execute_run(run_id, req.input, req.no_self_critique)
         )
-        REGISTRY.attach_task(record.id, task)
+        record = REGISTRY.create(req.input, task=task, run_id=run_id)
         return {"run_id": record.id, "status": record.status}
 
     @app.get("/api/runs/{run_id}/events")
@@ -209,7 +212,7 @@ def create_app() -> FastAPI:
     async def delete_run(run_id: str) -> dict[str, Any]:
         if not _is_uuid(run_id):
             raise HTTPException(status_code=404, detail=f"Unknown run: {run_id}")
-        ok = await REGISTRY.cancel(run_id)
+        ok = REGISTRY.cancel(run_id)
         if not ok:
             rec = REGISTRY.get(run_id)
             if rec is None:
