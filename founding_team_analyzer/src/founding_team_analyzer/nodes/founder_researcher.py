@@ -152,6 +152,7 @@ def _enforce_authoritative_title(
 def run(payload: dict[str, Any]) -> dict[str, Any]:
     founder: Founder = payload["founder"]
     company: Company | None = payload.get("company")
+    base_llm_calls: int = payload.get("base_llm_calls", 0)
 
     cost = CostLedger()
     if not founder or not founder.name:
@@ -222,7 +223,8 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
         )
         try:
             bundle, llm_cost = call_structured(
-                RawFactBundle, prompt_a, model=SETTINGS.model_extract
+                RawFactBundle, prompt_a, model=SETTINGS.model_extract,
+                llm_calls_so_far=base_llm_calls + cost.llm_calls,
             )
             cost = cost.merged(llm_cost)
             bundles.append(bundle.model_dump())
@@ -238,7 +240,10 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
         bundles_json=bundles_json,
     )
     try:
-        profile, llm_cost = call_structured(FounderProfile, prompt_b)
+        profile, llm_cost = call_structured(
+            FounderProfile, prompt_b,
+            llm_calls_so_far=base_llm_calls + cost.llm_calls,
+        )
         cost = cost.merged(llm_cost)
     except Exception as exc:
         log.exception("Stage B consolidation failed for %s", founder.name)

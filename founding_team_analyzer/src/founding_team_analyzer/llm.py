@@ -36,17 +36,6 @@ class LLMBudgetExceeded(RuntimeError):
     """Raised when the per-run LLM call cap is hit."""
 
 
-_call_counter = {"value": 0}
-
-
-def reset_llm_counter() -> None:
-    _call_counter["value"] = 0
-
-
-def llm_calls_made() -> int:
-    return _call_counter["value"]
-
-
 def _is_reasoning_family(model: str) -> bool:
     name = (model or "").lower()
     return name.startswith(("gpt-5", "o1", "o3", "o4"))
@@ -91,14 +80,21 @@ def call_structured(
     *,
     model: str | None = None,
     effort: str | None = None,
+    llm_calls_so_far: int = 0,
+    max_llm_calls: int | None = None,
 ) -> tuple[T, CostLedger]:
     """Call an OpenAI chat model and parse its output into `schema`.
 
     Returns (model_instance, cost). On unrecoverable failure, returns a
     default-constructed schema instance with whatever fields are required.
+
+    Per-run budget is checked via llm_calls_so_far + 1 vs max_llm_calls.
+    This replaces the former global _call_counter so concurrent runs have
+    independent budgets.
     """
-    if _call_counter["value"] >= SETTINGS.max_llm_calls:
-        log.warning("LLM call budget reached (%d); returning empty result.", SETTINGS.max_llm_calls)
+    budget = max_llm_calls if max_llm_calls is not None else SETTINGS.max_llm_calls
+    if llm_calls_so_far >= budget:
+        log.warning("LLM call budget reached (%d/%d); returning empty result.", llm_calls_so_far, budget)
         # Best-effort: return a default-constructed instance (works when all fields optional).
         try:
             return schema(), CostLedger()
@@ -106,8 +102,6 @@ def call_structured(
             raise LLMBudgetExceeded(
                 f"LLM budget exhausted and {schema.__name__} requires fields with no defaults."
             )
-
-    _call_counter["value"] += 1
     chosen_model = model or SETTINGS.model_reasoning
     # Default effort: reasoning-tier for the reasoning model, low for the extraction model.
     if effort is None:

@@ -31,6 +31,7 @@ class AnalyzerState(TypedDict, total=False):
     report_md: str | None
     warnings: Annotated[list[str], operator.add]
     cost: Annotated[CostLedger, merge_cost]
+    self_critique_disabled: bool
 
 
 class ResearcherInput(TypedDict, total=False):
@@ -38,3 +39,4 @@ class ResearcherInput(TypedDict, total=False):
 
     founder: Founder
     company: Company | None
+    base_llm_calls: int

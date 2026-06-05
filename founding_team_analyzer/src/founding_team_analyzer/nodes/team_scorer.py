@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from typing import Any
 
 from ..llm import call_structured, load_prompt
@@ -40,10 +39,7 @@ def _empty_score() -> TeamScore:
 
 
 def _self_critique_enabled(state: AnalyzerState) -> bool:
-    flag = os.environ.get("FTA_DISABLE_SELF_CRITIQUE")
-    if flag and flag.lower() in {"1", "true", "yes"}:
-        return False
-    return True
+    return not state.get("self_critique_disabled", False)
 
 
 def run(state: AnalyzerState) -> dict[str, Any]:
@@ -51,6 +47,7 @@ def run(state: AnalyzerState) -> dict[str, Any]:
     profiles = state.get("profiles") or []
     overlaps = state.get("overlaps")
     cost = CostLedger()
+    prior_llm_calls = (state.get("cost") or CostLedger()).llm_calls
 
     if not profiles:
         warning = "TeamScorer: no founder profiles; emitting placeholder score."
@@ -62,7 +59,10 @@ def run(state: AnalyzerState) -> dict[str, Any]:
         dossier=dossier,
     )
     try:
-        score, llm_cost = call_structured(TeamScore, prompt)
+        score, llm_cost = call_structured(
+            TeamScore, prompt,
+            llm_calls_so_far=prior_llm_calls + cost.llm_calls,
+        )
         cost = cost.merged(llm_cost)
     except Exception as exc:
         log.exception("TeamScorer LLM call failed")
@@ -78,7 +78,10 @@ def run(state: AnalyzerState) -> dict[str, Any]:
             prior_score_json=score.model_dump_json(indent=2),
         )
         try:
-            refined, llm_cost = call_structured(TeamScore, critique_prompt)
+            refined, llm_cost = call_structured(
+                TeamScore, critique_prompt,
+                llm_calls_so_far=prior_llm_calls + cost.llm_calls,
+            )
             cost = cost.merged(llm_cost)
             if refined.criteria:
                 score = refined

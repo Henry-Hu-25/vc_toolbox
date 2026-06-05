@@ -16,7 +16,6 @@ from rich.panel import Panel
 
 from . import config as config_module
 from .graph import run_analysis
-from .llm import reset_llm_counter
 
 app = typer.Typer(add_completion=False, help="Founding Team Analyzer", no_args_is_help=True)
 console = Console()
@@ -62,12 +61,9 @@ def analyze(
     os.environ["FTA_MAX_FOUNDERS"] = str(max_founders)
     if model:
         os.environ["FTA_MODEL_REASONING"] = model
-    if no_self_critique:
-        os.environ["FTA_DISABLE_SELF_CRITIQUE"] = "1"
 
     # Refresh the cached Settings now that env vars are set.
     config_module.SETTINGS = config_module.Settings.load()
-    reset_llm_counter()
 
     if not config_module.SETTINGS.openai_api_key or not config_module.SETTINGS.tavily_api_key:
         console.print(
@@ -78,7 +74,7 @@ def analyze(
     console.print(Panel.fit(f"Analyzing: [bold]{raw_input}[/bold]", title="Founding Team Analyzer"))
 
     try:
-        state = run_analysis(raw_input)
+        state = run_analysis(raw_input, no_self_critique=no_self_critique)
     except Exception as exc:
         console.print(f"[red]Run failed:[/red] {exc}")
         raise typer.Exit(code=1) from exc

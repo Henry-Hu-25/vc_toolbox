@@ -14,19 +14,23 @@ from .state import AnalyzerState
 log = logging.getLogger(__name__)
 
 
-async def stream_analysis(raw_input: str) -> AsyncIterator[Event]:
+async def stream_analysis(raw_input: str, *, no_self_critique: bool = False) -> AsyncIterator[Event]:
     """Yield Event objects as the graph executes node-by-node.
 
     Strategy: kick off the full graph in a background thread, and tail
     progress via LangGraph's `astream` (state updates by node). When the
     background invocation completes, emit a `done` event with the slug so
     the UI can navigate to the saved report.
+
+    Per-run state (self_critique_disabled) is initialized from the
+    no_self_critique kwarg so concurrent runs have independent flags.
     """
     app = build_graph()
     initial: AnalyzerState = {
         "raw_input": raw_input,
         "warnings": [],
         "cost": CostLedger(),
+        "self_critique_disabled": no_self_critique,
     }
 
     yield Event(

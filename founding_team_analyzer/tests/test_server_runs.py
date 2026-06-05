@@ -54,7 +54,7 @@ def app_env(tmp_path: Path, monkeypatch):
 
     server_module.REGISTRY = runs_module.REGISTRY
 
-    async def fake_stream(raw_input: str) -> AsyncIterator[FakeEvent]:
+    async def fake_stream(raw_input: str, *, no_self_critique: bool = False) -> AsyncIterator[FakeEvent]:
         yield FakeEvent("run_started", {"input": raw_input, "nodes": []})
         yield FakeEvent("node_started", {"node": "company_profiler", "label": "x"})
         yield FakeEvent("node_finished", {"node": "company_profiler", "label": "x", "warnings": []})

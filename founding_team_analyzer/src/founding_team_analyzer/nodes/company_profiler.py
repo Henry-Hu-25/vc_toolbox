@@ -83,6 +83,7 @@ def run(state: AnalyzerState) -> dict[str, Any]:
         tavily_searches=sum(1 for _ in sources if _.get("url")),
         tavily_extracts=1 if input_type == "url" else 0,
     )
+    prior_llm_calls = (state.get("cost") or CostLedger()).llm_calls
 
     prompt = load_prompt("company_profiler").format(
         raw_input=raw_input,
@@ -91,7 +92,10 @@ def run(state: AnalyzerState) -> dict[str, Any]:
     )
 
     try:
-        company, llm_cost = call_structured(Company, prompt)
+        company, llm_cost = call_structured(
+            Company, prompt,
+            llm_calls_so_far=prior_llm_calls + cost.llm_calls,
+        )
         cost = cost.merged(llm_cost)
     except Exception as exc:
         log.exception("CompanyProfiler LLM call failed")
@@ -109,7 +113,7 @@ def run(state: AnalyzerState) -> dict[str, Any]:
     if input_type == "linkedin_company" and not company.linkedin_url:
         company.linkedin_url = raw_input
 
-    company, gap_cost, gap_warnings = _gap_fill(company)
+    company, gap_cost, gap_warnings = _gap_fill(company, prior_llm_calls=prior_llm_calls + cost.llm_calls)
     cost = cost.merged(gap_cost)
     warnings.extend(gap_warnings)
 
@@ -120,7 +124,7 @@ def run(state: AnalyzerState) -> dict[str, Any]:
     }
 
 
-def _gap_fill(company: Company) -> tuple[Company, CostLedger, list[str]]:
+def _gap_fill(company: Company, *, prior_llm_calls: int = 0) -> tuple[Company, CostLedger, list[str]]:
     """If key fields are missing, fire targeted Tavily searches and re-prompt."""
     cost = CostLedger()
     warnings: list[str] = []
@@ -149,7 +153,10 @@ def _gap_fill(company: Company) -> tuple[Company, CostLedger, list[str]]:
         sources_block=_build_sources_block(extra_sources),
     )
     try:
-        refined, llm_cost = call_structured(Company, prompt)
+        refined, llm_cost = call_structured(
+            Company, prompt,
+            llm_calls_so_far=prior_llm_calls + cost.llm_calls,
+        )
         cost = cost.merged(llm_cost)
     except Exception as exc:
         warnings.append(f"CompanyProfiler gap-fill failed: {exc}")

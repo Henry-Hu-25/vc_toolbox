@@ -116,6 +116,7 @@ def run(state: AnalyzerState) -> dict[str, Any]:
             1 for item in sources if "team page" in (item.get("title") or "").lower()
         ),
     )
+    prior_llm_calls = (state.get("cost") or CostLedger()).llm_calls
     prompt = load_prompt("founder_finder").format(
         company_name=company.name,
         company_website=company.website or "",
@@ -124,7 +125,10 @@ def run(state: AnalyzerState) -> dict[str, Any]:
     )
 
     try:
-        result, llm_cost = call_structured(FounderList, prompt, model=SETTINGS.model_extract)
+        result, llm_cost = call_structured(
+            FounderList, prompt, model=SETTINGS.model_extract,
+            llm_calls_so_far=prior_llm_calls + cost.llm_calls,
+        )
         cost = cost.merged(llm_cost)
     except Exception as exc:
         log.exception("FounderFinder LLM call failed")

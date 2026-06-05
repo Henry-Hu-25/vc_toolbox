@@ -30,7 +30,6 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from . import config as config_module
-from .llm import reset_llm_counter
 from .runs import REGISTRY, RunRecord
 from .streaming_graph import stream_analysis
 from .tools.normalize import slugify
@@ -63,16 +62,8 @@ def _is_uuid(value: str) -> bool:
 
 async def _execute_run(run_id: str, raw_input: str, no_self_critique: bool) -> None:
     """Worker coroutine: pipes stream_analysis events into REGISTRY."""
-    import os
-
-    if no_self_critique:
-        os.environ["FTA_DISABLE_SELF_CRITIQUE"] = "1"
-    else:
-        os.environ.pop("FTA_DISABLE_SELF_CRITIQUE", None)
-    reset_llm_counter()
-
     try:
-        async for event in stream_analysis(raw_input):
+        async for event in stream_analysis(raw_input, no_self_critique=no_self_critique):
             payload = event.to_dict()
             if event.type == "done":
                 company_name = payload["payload"].get("company_name")

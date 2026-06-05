@@ -112,6 +112,7 @@ def _max_strength(values: list[Strength]) -> Strength:
 def run(state: AnalyzerState) -> dict[str, Any]:
     profiles = state.get("profiles") or []
     cost = CostLedger()
+    prior_llm_calls = (state.get("cost") or CostLedger()).llm_calls
     if len(profiles) < 2:
         notes = ["Solo founder: pairwise overlap not applicable."] if profiles else [
             "No founders to compute overlap from."
@@ -147,7 +148,10 @@ def run(state: AnalyzerState) -> dict[str, Any]:
         overlap_payload=json.dumps(payload, ensure_ascii=False, indent=2),
     )
     try:
-        polished, llm_cost = call_structured(TeamOverlap, prompt)
+        polished, llm_cost = call_structured(
+            TeamOverlap, prompt,
+            llm_calls_so_far=prior_llm_calls + cost.llm_calls,
+        )
         cost = cost.merged(llm_cost)
     except Exception as exc:
         log.warning("Overlap narrative LLM call failed: %s", exc)

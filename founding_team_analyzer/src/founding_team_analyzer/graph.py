@@ -23,13 +23,14 @@ from .state import AnalyzerState
 def _dispatch_researchers(state: AnalyzerState) -> list[Send]:
     founders = state.get("founders") or []
     company = state.get("company")
+    base_llm_calls = (state.get("cost") or CostLedger()).llm_calls
     if not founders:
         # No founders -> skip researcher fan-out, go straight to overlap (which will no-op).
         return [Send("overlap_analyzer", state)]
     return [
         Send(
             "founder_researcher",
-            {"founder": f, "company": company},
+            {"founder": f, "company": company, "base_llm_calls": base_llm_calls},
         )
         for f in founders
     ]
@@ -59,12 +60,13 @@ def build_graph() -> Any:
     return graph.compile()
 
 
-def run_analysis(raw_input: str) -> AnalyzerState:
+def run_analysis(raw_input: str, *, no_self_critique: bool = False) -> AnalyzerState:
     app = build_graph()
     initial: AnalyzerState = {
         "raw_input": raw_input,
         "warnings": [],
         "cost": CostLedger(),
+        "self_critique_disabled": no_self_critique,
     }
     result = app.invoke(initial)
     return result  # type: ignore[return-value]

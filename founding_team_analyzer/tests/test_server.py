@@ -17,6 +17,12 @@ def client(tmp_path: Path, monkeypatch):
     from founding_team_analyzer import config as cfg
     cfg.SETTINGS = cfg.Settings.load()
 
+    # Reset the in-memory registry to avoid cross-test state leakage.
+    from founding_team_analyzer import runs as runs_module
+    from founding_team_analyzer import server as server_module
+    runs_module.REGISTRY = runs_module.RunRegistry()
+    server_module.REGISTRY = runs_module.REGISTRY
+
     from founding_team_analyzer.server import create_app
 
     app = create_app()
