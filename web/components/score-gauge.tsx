@@ -30,8 +30,16 @@ export function ScoreGauge({ score, size = 160, strokeWidth = 12 }: Props) {
   }, [clamped, mv]);
 
   return (
-    <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
-      <svg width={size} height={size}>
+    <div
+      className="relative inline-flex items-center justify-center"
+      style={{ width: size, height: size }}
+      role="img"
+      aria-valuenow={clamped}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-label={`Team score: ${clamped} out of 100`}
+    >
+      <svg width={size} height={size} aria-hidden="true">
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -52,7 +60,7 @@ export function ScoreGauge({ score, size = 160, strokeWidth = 12 }: Props) {
           style={{ strokeDashoffset: offset, rotate: -90, transformOrigin: "center" }}
         />
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
+      <div className="absolute inset-0 flex flex-col items-center justify-center" aria-hidden="true">
         <motion.span
           className="text-4xl font-semibold tabular-nums"
           style={{ color }}

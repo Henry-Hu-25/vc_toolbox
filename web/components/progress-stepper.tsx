@@ -19,7 +19,12 @@ export function ProgressStepper({ steps }: { steps: Step[] }) {
       {steps.map((step, idx) => {
         const isLast = idx === steps.length - 1;
         return (
-          <li key={step.id} className="flex gap-4">
+          <li
+            key={step.id}
+            className="flex gap-4"
+            aria-current={step.state === "running" ? "step" : undefined}
+            aria-label={`${step.label}, ${stepAriaLabel(step.state)}`}
+          >
             <div className="flex flex-col items-center">
               <StepIcon state={step.state} />
               {!isLast && (
@@ -47,7 +52,7 @@ export function ProgressStepper({ steps }: { steps: Step[] }) {
                   {step.label}
                 </span>
                 {step.state === "running" && (
-                  <span className="text-xs text-muted-fg">Working...</span>
+                  <span className="text-xs text-muted-fg" aria-hidden="true">Working...</span>
                 )}
               </div>
               <AnimatePresence>
@@ -70,6 +75,19 @@ export function ProgressStepper({ steps }: { steps: Step[] }) {
   );
 }
 
+function stepAriaLabel(state: StepState): string {
+  switch (state) {
+    case "done":
+      return "completed";
+    case "running":
+      return "in progress";
+    case "warning":
+      return "completed with warning";
+    case "pending":
+      return "not started";
+  }
+}
+
 function StepIcon({ state }: { state: StepState }) {
   if (state === "done") {
     return (
@@ -78,6 +96,7 @@ function StepIcon({ state }: { state: StepState }) {
         animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
         className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-fg"
+        aria-hidden="true"
       >
         <Check className="h-3.5 w-3.5" />
       </motion.div>
@@ -85,20 +104,20 @@ function StepIcon({ state }: { state: StepState }) {
   }
   if (state === "running") {
     return (
-      <div className="flex h-6 w-6 items-center justify-center rounded-full border border-primary text-primary">
+      <div className="flex h-6 w-6 items-center justify-center rounded-full border border-primary text-primary" aria-hidden="true">
         <Loader2 className="h-3.5 w-3.5 animate-spin" />
       </div>
     );
   }
   if (state === "warning") {
     return (
-      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-white">
+      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-white" aria-hidden="true">
         <AlertTriangle className="h-3.5 w-3.5" />
       </div>
     );
   }
   return (
-    <div className="flex h-6 w-6 items-center justify-center rounded-full border border-border text-muted-fg">
+    <div className="flex h-6 w-6 items-center justify-center rounded-full border border-border text-muted-fg" aria-hidden="true">
       <Circle className="h-3 w-3" />
     </div>
   );

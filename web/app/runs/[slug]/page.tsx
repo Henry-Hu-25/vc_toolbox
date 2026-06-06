@@ -142,11 +142,31 @@ function Report({
 
       {/* View toggle */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex rounded-md border border-border p-1 bg-card">
+        <div
+          className="inline-flex rounded-md border border-border p-1 bg-card"
+          role="tablist"
+          aria-label="Report view"
+        >
           {(["structured", "markdown", "json"] as const).map((v) => (
             <button
               key={v}
+              role="tab"
+              aria-selected={view === v}
+              aria-controls={`tabpanel-${v}`}
               onClick={() => setView(v)}
+              onKeyDown={(e) => {
+                const views = ["structured", "markdown", "json"] as const;
+                const idx = views.indexOf(v);
+                let next = -1;
+                if (e.key === "ArrowRight") next = (idx + 1) % views.length;
+                else if (e.key === "ArrowLeft") next = (idx - 1 + views.length) % views.length;
+                if (next >= 0) {
+                  e.preventDefault();
+                  setView(views[next]);
+                  (e.currentTarget.parentElement?.querySelector(`[data-tab="${views[next]}"]`) as HTMLElement)?.focus();
+                }
+              }}
+              data-tab={v}
               className={`px-3 py-1 text-xs rounded ${
                 view === v ? "bg-muted text-fg" : "text-muted-fg hover:text-fg"
               }`}
@@ -175,7 +195,7 @@ function Report({
       </div>
 
       {view === "structured" && (
-        <div className="space-y-10">
+        <div role="tabpanel" id="tabpanel-structured" aria-labelledby="structured" className="space-y-10">
           <Section title="Founders">
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {report.founders.map((f, i) => (
@@ -208,7 +228,7 @@ function Report({
       )}
 
       {view === "markdown" && (
-        <Card>
+        <Card role="tabpanel" id="tabpanel-markdown" aria-labelledby="markdown">
           <CardContent className="p-6 sm:p-8">
             <MarkdownReport markdown={data.markdown} />
           </CardContent>
@@ -216,7 +236,7 @@ function Report({
       )}
 
       {view === "json" && (
-        <Card>
+        <Card role="tabpanel" id="tabpanel-json" aria-labelledby="json">
           <CardContent className="p-0">
             <pre className="text-xs font-mono p-6 overflow-x-auto leading-6 max-h-[70vh]">
               {JSON.stringify(report, null, 2)}
