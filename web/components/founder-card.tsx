@@ -133,6 +133,10 @@ export function FounderCard({ founder }: { founder: FounderProfile }) {
           </a>
         )}
 
+        {founder.source_urls.length > 0 && (
+          <SourceUrlsFooter urls={founder.source_urls} />
+        )}
+
         {founder.missing_fields.length > 0 && (
           <p className="text-[11px] text-muted-fg">
             Missing: {founder.missing_fields.join(", ")}
@@ -197,6 +201,63 @@ function Row({
 
 function Empty() {
   return <p className="text-xs text-muted-fg italic">No data found.</p>;
+}
+
+/** Collapsible footer for founder source URLs. */
+const SOURCE_COLLAPSE_THRESHOLD = 3;
+
+function SourceUrlsFooter({ urls }: { urls: string[] }) {
+  const collapsible = urls.length > SOURCE_COLLAPSE_THRESHOLD;
+  const body = (
+    <div className="space-y-1">
+      {urls.map((url, i) => (
+        <SourceLink key={i} url={url} />
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="pt-2 border-t border-border">
+      {collapsible ? (
+        <details>
+          <summary className="text-[11px] uppercase tracking-wider text-muted-fg cursor-pointer select-none hover:text-fg">
+            Sources ({urls.length})
+          </summary>
+          <div className="mt-1.5">{body}</div>
+        </details>
+      ) : (
+        <>
+          <span className="text-[11px] uppercase tracking-wider text-muted-fg">
+            Sources
+          </span>
+          <div className="mt-1">{body}</div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function SourceLink({ url }: { url: string }) {
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1 text-xs text-primary hover:underline break-all"
+    >
+      {simplifyUrl(url)} <ExternalLink className="h-3 w-3 shrink-0" />
+    </a>
+  );
+}
+
+function simplifyUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const path = u.pathname.replace(/\/$/, "");
+    return path ? `${u.hostname}${path}` : u.hostname;
+  } catch {
+    return url;
+  }
 }
 
 function yearRange(s: number | null, e: number | null): string | null {
