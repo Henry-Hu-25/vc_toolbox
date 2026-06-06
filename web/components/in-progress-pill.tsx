@@ -6,9 +6,12 @@ import { Loader2 } from "lucide-react";
 import { useRunStore } from "@/lib/run-store";
 
 export function InProgressPill() {
+  const hydrated = useRunStore((s) => s.hydrated);
   const status = useRunStore((s) => s.status);
   const input = useRunStore((s) => s.input);
 
+  // Do not render until hydration is complete to avoid SSR/CSR mismatch.
+  if (!hydrated) return null;
   if (status !== "running" && status !== "pending") return null;
 
   return (

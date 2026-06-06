@@ -59,6 +59,7 @@ interface RunState {
   slug: string | null;
   _unsubscribe: (() => void) | null;
   _hydrating: boolean;
+  hydrated: boolean;
 }
 
 interface RunActions {
@@ -83,6 +84,7 @@ const INITIAL: RunState = {
   slug: null,
   _unsubscribe: null,
   _hydrating: false,
+  hydrated: false,
 };
 
 export const useRunStore = create<Store>()(
@@ -93,7 +95,7 @@ export const useRunStore = create<Store>()(
       reset: () => {
         const u = get()._unsubscribe;
         if (u) u();
-        set({ ...INITIAL, steps: initialSteps(), _unsubscribe: null });
+        set({ ...INITIAL, steps: initialSteps(), _unsubscribe: null, hydrated: true });
       },
 
       startRun: async (input, opts) => {
@@ -106,6 +108,7 @@ export const useRunStore = create<Store>()(
           input,
           _unsubscribe: null,
           _hydrating: false,
+          hydrated: true,
         });
         try {
           const resp = await startAnalyze(input, opts);
@@ -255,6 +258,7 @@ export const useRunStore = create<Store>()(
     {
       name: "fta:run",
       storage: createJSONStorage(() => localStorage),
+      skipHydration: true,
       partialize: (state) => ({
         runId: state.runId,
         status: state.status,

@@ -27,6 +27,7 @@ export function AnalyzeForm() {
   const warnings = useRunStore((s) => s.warnings);
   const error = useRunStore((s) => s.error);
   const slug = useRunStore((s) => s.slug);
+  const hydrated = useRunStore((s) => s.hydrated);
   const startRun = useRunStore((s) => s.startRun);
   const cancelRun = useRunStore((s) => s.cancelRun);
   const reset = useRunStore((s) => s.reset);
@@ -37,8 +38,11 @@ export function AnalyzeForm() {
   );
   const isStaleCompletion =
     status === "completed" && slug !== null && slug === staleSlugRef.current;
+  // Do not show the run panel until hydration is complete to avoid SSR/CSR
+  // mismatch — before rehydration the store always has idle/default state.
   const showRunPanel =
-    running || status === "failed" || status === "cancelled" || (status === "completed" && !isStaleCompletion);
+    hydrated &&
+    (running || status === "failed" || status === "cancelled" || (status === "completed" && !isStaleCompletion));
 
   async function handleSubmit(targetInput?: string) {
     const target = (targetInput ?? value).trim();
