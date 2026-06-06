@@ -275,7 +275,23 @@ function ScoreSection({
                 <td className="px-4 py-3 w-40">
                   <ScoreBar value={c.score} />
                 </td>
-                <td className="px-4 py-3 text-muted-fg">{c.rationale}</td>
+                <td className="px-4 py-3 text-muted-fg">
+                  {c.rationale}
+                  {c.evidence.length > 0 && (
+                    <details className="mt-2">
+                      <summary className="text-xs cursor-pointer text-muted-fg hover:text-fg select-none">
+                        Evidence ({c.evidence.length})
+                      </summary>
+                      <ul className="mt-2 space-y-1 pl-4 list-disc list-outside text-xs">
+                        {c.evidence.map((e, i) => (
+                          <li key={i}>
+                            <EvidenceText text={e} />
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -376,4 +392,49 @@ function downloadMarkdown(slug: string, md: string) {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+const URL_RE = /https?:\/\/[^\s)>]+/i;
+
+function EvidenceText({ text }: { text: string }) {
+  const pureUrl = /^https?:\/\/[^\s]+$/i.test(text);
+  if (pureUrl) {
+    return (
+      <a
+        href={text}
+        target="_blank"
+        rel="noreferrer noopener"
+        className="text-primary hover:underline break-all"
+      >
+        {text}
+      </a>
+    );
+  }
+  const parts: React.ReactNode[] = [];
+  let remaining = text;
+  let key = 0;
+  while (remaining.length > 0) {
+    const match = remaining.match(URL_RE);
+    if (!match || match.index === undefined) {
+      parts.push(remaining);
+      break;
+    }
+    if (match.index > 0) {
+      parts.push(remaining.slice(0, match.index));
+    }
+    const href = match[0];
+    parts.push(
+      <a
+        key={key++}
+        href={href}
+        target="_blank"
+        rel="noreferrer noopener"
+        className="text-primary hover:underline break-all"
+      >
+        {href}
+      </a>
+    );
+    remaining = remaining.slice(match.index + href.length);
+  }
+  return <>{parts}</>;
 }
