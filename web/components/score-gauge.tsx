@@ -33,7 +33,7 @@ export function ScoreGauge({ score, size = 160, strokeWidth = 12 }: Props) {
     <div
       className="relative inline-flex items-center justify-center"
       style={{ width: size, height: size }}
-      role="img"
+      role="meter"
       aria-valuenow={clamped}
       aria-valuemin={0}
       aria-valuemax={100}
@@ -69,6 +69,11 @@ export function ScoreGauge({ score, size = 160, strokeWidth = 12 }: Props) {
         </motion.span>
         <span className="text-xs text-muted-fg mt-1">out of 100</span>
       </div>
+      {/* Screen-reader-only final value — prevents AT from announcing every
+          animation frame, per VAL-UI-010. */}
+      <span className="sr-only">
+        Team score: {clamped} out of 100
+      </span>
     </div>
   );
 }

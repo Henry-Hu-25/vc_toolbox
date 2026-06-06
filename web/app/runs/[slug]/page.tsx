@@ -150,9 +150,11 @@ function Report({
           {(["structured", "markdown", "json"] as const).map((v) => (
             <button
               key={v}
+              id={v}
               role="tab"
               aria-selected={view === v}
               aria-controls={`tabpanel-${v}`}
+              tabIndex={view === v ? 0 : -1}
               onClick={() => setView(v)}
               onKeyDown={(e) => {
                 const views = ["structured", "markdown", "json"] as const;
@@ -163,7 +165,7 @@ function Report({
                 if (next >= 0) {
                   e.preventDefault();
                   setView(views[next]);
-                  (e.currentTarget.parentElement?.querySelector(`[data-tab="${views[next]}"]`) as HTMLElement)?.focus();
+                  (e.currentTarget.parentElement?.querySelector(`[id="${views[next]}"]`) as HTMLElement)?.focus();
                 }
               }}
               data-tab={v}
@@ -214,7 +216,7 @@ function Report({
           <Section title="Cost & sources">
             <CostLedger cost={report.cost} className="mb-4" />
             {report.warnings.length > 0 && (
-              <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-300 space-y-0.5">
+              <div className="rounded-md border border-amber-500/30 dark:border-amber-500/40 bg-amber-500/10 dark:bg-amber-500/20 p-3 text-xs text-amber-700 dark:text-amber-300 space-y-0.5">
                 <p className="font-medium mb-1">
                   Warnings ({report.warnings.length})
                 </p>
