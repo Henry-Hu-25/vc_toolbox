@@ -6,7 +6,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+import requests.exceptions
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 from .. import config as config_module
 
@@ -16,6 +17,19 @@ try:  # Tavily client is required for live runs, but tests may monkeypatch this 
     from tavily import TavilyClient  # type: ignore
 except Exception:  # pragma: no cover - optional at import time for tests
     TavilyClient = None  # type: ignore[assignment]
+
+try:  # Tavily error classes — optional at import time for tests.
+    from tavily.errors import (  # type: ignore
+        BadRequestError,
+        ForbiddenError,
+        InvalidAPIKeyError,
+        UsageLimitExceededError,
+    )
+except Exception:  # pragma: no cover
+    BadRequestError = None  # type: ignore[assignment,misc]
+    ForbiddenError = None  # type: ignore[assignment,misc]
+    InvalidAPIKeyError = None  # type: ignore[assignment,misc]
+    UsageLimitExceededError = None  # type: ignore[assignment,misc]
 
 
 @dataclass
@@ -50,12 +64,71 @@ def _client() -> Any:
     return TavilyClient(api_key=config_module.SETTINGS.tavily_api_key)
 
 
-@retry(
+# ---------------------------------------------------------------------------
+# Retry predicate — only retry on transient errors, not auth/4xx
+# ---------------------------------------------------------------------------
+
+# Exceptions that represent non-retryable client / auth errors.
+_NON_RETRYABLE: tuple[type[Exception], ...] = tuple(
+    cls
+    for cls in (InvalidAPIKeyError, ForbiddenError, BadRequestError)
+    if cls is not None  # filtered when tavily.errors is unavailable
+)
+
+
+def _should_retry(exc: BaseException) -> bool:
+    """Return True for transient errors that are worth retrying (5xx,
+    connection failures, timeouts, rate limits).  Return False for
+    auth failures (401/403) and client errors (4xx except 429)."""
+    # Auth / client errors — never retry
+    if _NON_RETRYABLE and isinstance(exc, _NON_RETRYABLE):
+        return False
+
+    # 429 rate-limit — retry with backoff
+    if UsageLimitExceededError is not None and isinstance(exc, UsageLimitExceededError):
+        return True
+
+    # requests HTTPError — retry only for 5xx
+    if isinstance(exc, requests.exceptions.HTTPError):
+        response = getattr(exc, "response", None)
+        status = getattr(response, "status_code", None)
+        if isinstance(status, int):
+            return status >= 500
+        # No status code info — assume transient
+        return True
+
+    # Transient network errors — retry
+    if isinstance(
+        exc,
+        (
+            requests.exceptions.ConnectionError,
+            requests.exceptions.Timeout,
+        ),
+    ):
+        return True
+
+    # Tavily TimeoutError wraps requests Timeout — also retry
+    try:
+        from tavily.errors import TimeoutError as TavilyTimeout  # type: ignore
+
+        if isinstance(exc, TavilyTimeout):
+            return True
+    except Exception:  # pragma: no cover
+        pass
+
+    # Anything else is unexpected — don't retry
+    return False
+
+
+_retry_decorator = retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=1, max=8),
-    retry=retry_if_exception_type(Exception),
+    retry=retry_if_exception(_should_retry),
     reraise=True,
 )
+
+
+@_retry_decorator
 def _do_search(query: str, max_results: int, search_depth: str) -> dict[str, Any]:
     return _client().search(
         query=query,
@@ -65,12 +138,7 @@ def _do_search(query: str, max_results: int, search_depth: str) -> dict[str, Any
     )
 
 
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=1, max=8),
-    retry=retry_if_exception_type(Exception),
-    reraise=True,
-)
+@_retry_decorator
 def _do_extract(url: str) -> dict[str, Any]:
     return _client().extract(urls=[url])
 
