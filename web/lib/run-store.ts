@@ -107,10 +107,19 @@ export const useRunStore = create<Store>()(
           _unsubscribe: null,
           _hydrating: false,
         });
-        const resp = await startAnalyze(input, opts);
-        set({ runId: resp.run_id, status: resp.status });
-        get().subscribe(resp.run_id);
-        return resp.run_id;
+        try {
+          const resp = await startAnalyze(input, opts);
+          set({ runId: resp.run_id, status: resp.status });
+          get().subscribe(resp.run_id);
+          return resp.run_id;
+        } catch (err) {
+          const msg =
+            err instanceof Error
+              ? err.message
+              : "Failed to start analysis. Check that the backend is running.";
+          set({ status: "failed", error: msg });
+          throw err;
+        }
       },
 
       subscribe: (runId) => {
