@@ -109,6 +109,56 @@ def _max_strength(values: list[Strength]) -> Strength:
     return best  # type: ignore[return-value]
 
 
+def _deterministic_strength(pair: FounderPairOverlap) -> Strength:
+    """Compute a fallback pair strength from deterministic overlap data.
+
+    Mirrors the rubric in overlap_narrative.md:
+    - strong: co-founded a prior company together, or 2+ year overlap at
+      same employer in same technical cluster.
+    - medium: overlapping years at the same school or employer.
+    - weak: shared institution without overlapping years, or shared
+      accelerators only.
+    - none: no overlap.
+    """
+    # Shared prior startups -> strong (they co-founded together)
+    if pair.shared_prior_startups:
+        return "strong"
+
+    # Shared employer with 2+ year overlap in same technical cluster -> strong
+    for emp in pair.shared_employers:
+        oy = emp.overlap_years
+        if oy and emp.same_technical_cluster:
+            # Parse overlap_years like "2020-2022" (2+ years)
+            try:
+                parts = oy.split("-")
+                if len(parts) == 2:
+                    span = int(parts[1]) - int(parts[0])
+                    if span >= 2:
+                        return "strong"
+            except (ValueError, IndexError):
+                pass
+
+    # Shared employer with any overlapping years -> medium
+    for emp in pair.shared_employers:
+        if emp.overlap_years:
+            return "medium"
+
+    # Shared school with overlapping years -> medium
+    for sch in pair.shared_schools:
+        if sch.overlap_years:
+            return "medium"
+
+    # Shared employer or school without overlapping years -> weak
+    if pair.shared_employers or pair.shared_schools:
+        return "weak"
+
+    # Shared accelerators only -> weak
+    if pair.shared_accelerators:
+        return "weak"
+
+    return "none"
+
+
 def run(state: AnalyzerState) -> dict[str, Any]:
     profiles = state.get("profiles") or []
     cost = CostLedger()
@@ -153,20 +203,30 @@ def run(state: AnalyzerState) -> dict[str, Any]:
             llm_calls_so_far=prior_llm_calls + cost.llm_calls,
         )
         cost = cost.merged(llm_cost)
+        fallback_warning = None
     except Exception as exc:
         log.warning("Overlap narrative LLM call failed: %s", exc)
+        # Assign deterministic strengths to each pair so overall_strength
+        # is consistent with pair strengths (no internal contradiction).
+        for p in pairs:
+            p.strength = _deterministic_strength(p)
         polished = TeamOverlap(
             pairs=pairs,
-            overall_strength=_max_strength(["medium" if has_any_overlap else "none"]),
+            overall_strength=_max_strength([p.strength for p in pairs]),
         )
+        fallback_warning = f"Overlap narrative LLM call failed ({exc}); using deterministic overlap strengths only."
 
     if not polished.pairs:
         polished.pairs = pairs
     if polished.overall_strength == "none" and has_any_overlap:
         polished.overall_strength = _max_strength([p.strength for p in polished.pairs])
 
+    warnings: list[str] = []
+    if fallback_warning:
+        warnings.append(fallback_warning)
+
     return {
         "overlaps": polished,
         "cost": cost,
-        "warnings": [],
+        "warnings": warnings,
     }
