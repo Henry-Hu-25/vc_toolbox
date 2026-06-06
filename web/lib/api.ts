@@ -110,14 +110,15 @@ export function subscribeRunEvents(
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      const sepRe = /\r?\n\r?\n/;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
-        let idx: number;
-        while ((idx = buffer.indexOf("\n\n")) !== -1) {
-          const chunk = buffer.slice(0, idx);
-          buffer = buffer.slice(idx + 2);
+        let m: RegExpMatchArray | null;
+        while ((m = buffer.match(sepRe)) !== null) {
+          const chunk = buffer.slice(0, m.index!);
+          buffer = buffer.slice(m.index! + m[0].length);
           const parsed = parseSseChunk(chunk);
           if (parsed) onEvent(parsed);
         }
@@ -132,14 +133,15 @@ export function subscribeRunEvents(
 }
 
 function parseSseChunk(chunk: string): StreamEvent | null {
-  const lines = chunk.split("\n");
-  let data = "";
+  const lines = chunk.split(/\r?\n/);
+  const dataParts: string[] = [];
   for (const line of lines) {
     if (line.startsWith("data:")) {
-      data += line.slice(5).trim();
+      dataParts.push(line.slice(5).trimStart());
     }
   }
-  if (!data) return null;
+  if (dataParts.length === 0) return null;
+  const data = dataParts.join("\n");
   try {
     const obj = JSON.parse(data) as StreamEvent;
     return obj;
