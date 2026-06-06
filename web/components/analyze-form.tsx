@@ -218,7 +218,7 @@ export function AnalyzeForm() {
               {cost && <CostLedger cost={cost} />}
 
               {warnings.length > 0 && (
-                <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-300">
+                <div className="rounded-md border border-amber-500/30 dark:border-amber-500/40 bg-amber-500/10 dark:bg-amber-500/20 p-3 text-xs text-amber-700 dark:text-amber-300">
                   <p className="font-medium mb-1">
                     {warnings.length} warning{warnings.length === 1 ? "" : "s"}
                   </p>
@@ -238,7 +238,7 @@ export function AnalyzeForm() {
               )}
 
               {error && (
-                <div className="rounded-md border border-rose-500/30 bg-rose-500/5 p-3 text-sm text-rose-700 dark:text-rose-300">
+                <div className="rounded-md border border-rose-500/30 dark:border-rose-500/40 bg-rose-500/10 dark:bg-rose-500/20 p-3 text-sm text-rose-700 dark:text-rose-300">
                   <p className="font-medium">Run failed</p>
                   <p className="text-xs mt-1 break-all">{error}</p>
                   <Button
