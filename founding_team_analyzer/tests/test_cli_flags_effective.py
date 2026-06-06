@@ -63,6 +63,7 @@ class _SettingsOverride:
             "max_registry_runs": 100,
             "http_timeout": 15,
             "output_dir": Path("./out"),
+            "cors_origins": ("http://localhost:3000", "http://127.0.0.1:3000"),
         }
         base.update(self._overrides)
         config_module.SETTINGS = config_module.Settings(**base)

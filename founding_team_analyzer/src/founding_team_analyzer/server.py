@@ -147,12 +147,10 @@ def create_app() -> FastAPI:
         version="0.2.0",
         description="Multi-agent founding team analysis with live progress.",
     )
+    s = _settings()
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-        ],
+        allow_origins=list(s.cors_origins),
         allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
         allow_headers=["*"],
     )

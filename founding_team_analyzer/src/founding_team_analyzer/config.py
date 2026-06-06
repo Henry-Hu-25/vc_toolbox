@@ -29,6 +29,12 @@ def _effort_env(name: str, default: str) -> str:
     return raw if raw in _VALID_EFFORTS else default
 
 
+_DEFAULT_CORS_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+
 @dataclass(frozen=True)
 class Settings:
     openai_api_key: str | None
@@ -44,9 +50,18 @@ class Settings:
     max_registry_runs: int
     http_timeout: int
     output_dir: Path
+    cors_origins: tuple[str, ...]
 
     @classmethod
     def load(cls) -> "Settings":
+        raw_cors = os.getenv("FTA_CORS_ORIGINS", "").strip()
+        if raw_cors:
+            cors_origins = tuple(
+                o.strip() for o in raw_cors.split(",") if o.strip()
+            )
+        else:
+            cors_origins = tuple(_DEFAULT_CORS_ORIGINS)
+
         return cls(
             openai_api_key=os.getenv("OPENAI_API_KEY"),
             tavily_api_key=os.getenv("TAVILY_API_KEY"),
@@ -61,6 +76,7 @@ class Settings:
             max_registry_runs=_int_env("FTA_MAX_REGISTRY_RUNS", 100),
             http_timeout=_int_env("FTA_HTTP_TIMEOUT", 15),
             output_dir=Path(os.getenv("FTA_OUTPUT_DIR", "./out")),
+            cors_origins=cors_origins,
         )
 
 
