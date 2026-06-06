@@ -38,7 +38,7 @@ export function AnalyzeForm() {
   const isStaleCompletion =
     status === "completed" && slug !== null && slug === staleSlugRef.current;
   const showRunPanel =
-    running || status === "failed" || (status === "completed" && !isStaleCompletion);
+    running || status === "failed" || status === "cancelled" || (status === "completed" && !isStaleCompletion);
 
   async function handleSubmit(targetInput?: string) {
     const target = (targetInput ?? value).trim();
@@ -152,7 +152,7 @@ export function AnalyzeForm() {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs uppercase tracking-wider text-muted-fg">
-                    Analyzing
+                    {status === "cancelled" ? "Cancelled" : "Analyzing"}
                   </p>
                   <h2 className="text-xl font-semibold mt-1 break-all">
                     {input}
@@ -224,6 +224,14 @@ export function AnalyzeForm() {
                   </div>
                   <Badge variant="primary">opening</Badge>
                 </motion.div>
+              )}
+
+              {status === "cancelled" && (
+                <div className="rounded-md border border-border bg-muted/30 p-4">
+                  <p className="text-sm font-medium text-muted-fg">
+                    Analysis cancelled
+                  </p>
+                </div>
               )}
             </motion.div>
           )}

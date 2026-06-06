@@ -139,13 +139,16 @@ export const useRunStore = create<Store>()(
       cancelRun: async () => {
         const { runId, _unsubscribe } = get();
         if (!runId) return;
+        // Optimistic: unsubscribe and set cancelled BEFORE the DELETE round-trip
+        // so the UI never flashes "Run failed" from a trailing error event.
+        if (_unsubscribe) _unsubscribe();
+        set({ status: "cancelled", error: null, _unsubscribe: null });
+        // Fire-and-forget DELETE (best effort — UI state is already set)
         try {
           await apiCancelRun(runId);
         } catch {
-          // best effort
+          // best effort — UI state is already cancelled
         }
-        if (_unsubscribe) _unsubscribe();
-        set({ status: "cancelled", _unsubscribe: null });
       },
 
       hydrate: async () => {
@@ -231,8 +234,18 @@ export const useRunStore = create<Store>()(
             next.status = "completed";
             next.slug = slug || null;
           } else if (event.type === "error") {
-            next.status = "failed";
-            next.error = String(event.payload.message || "Unknown error");
+            // Ignore trailing error events from cancellation when the store
+            // already says cancelled — prevents flashing "Run failed" UI.
+            const msg = String(event.payload.message || "Unknown error");
+            if (
+              state.status === "cancelled" &&
+              msg.toLowerCase().includes("cancelled")
+            ) {
+              // stale cancellation error — skip
+            } else {
+              next.status = "failed";
+              next.error = msg;
+            }
           }
           next.steps = steps;
           return next as RunState;
