@@ -6,7 +6,7 @@ import logging
 from typing import Any
 from urllib.parse import urljoin, urlparse
 
-from ..config import SETTINGS
+from .. import config as config_module
 from ..llm import call_structured, load_prompt
 from ..schemas import Company, CostLedger, Founder, FounderList
 from ..state import AnalyzerState
@@ -120,13 +120,13 @@ def run(state: AnalyzerState) -> dict[str, Any]:
     prompt = load_prompt("founder_finder").format(
         company_name=company.name,
         company_website=company.website or "",
-        max_founders=SETTINGS.max_founders,
+        max_founders=config_module.SETTINGS.max_founders,
         sources_block=_build_sources_block(sources),
     )
 
     try:
         result, llm_cost = call_structured(
-            FounderList, prompt, model=SETTINGS.model_extract,
+            FounderList, prompt, model=config_module.SETTINGS.model_extract,
             llm_calls_so_far=prior_llm_calls + cost.llm_calls,
         )
         cost = cost.merged(llm_cost)
@@ -138,7 +138,7 @@ def run(state: AnalyzerState) -> dict[str, Any]:
             "cost": cost,
         }
 
-    founders, warnings = _filter_and_dedupe(result.founders, SETTINGS.max_founders)
+    founders, warnings = _filter_and_dedupe(result.founders, config_module.SETTINGS.max_founders)
     if not founders:
         warnings.append("FounderFinder: zero founders explicitly identified.")
     return {

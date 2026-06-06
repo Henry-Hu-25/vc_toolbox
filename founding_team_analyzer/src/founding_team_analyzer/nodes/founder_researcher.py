@@ -7,7 +7,7 @@ import logging
 from typing import Any
 from urllib.parse import urlparse
 
-from ..config import SETTINGS
+from .. import config as config_module
 from ..llm import call_structured, load_prompt
 from ..schemas import (
     Company,
@@ -164,7 +164,7 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
 
     # Phase 1: search.
     all_results: list[search_tool.SearchResult] = []
-    queries = _search_plan(founder, company)[: SETTINGS.max_tavily_per_founder]
+    queries = _search_plan(founder, company)[: config_module.SETTINGS.max_tavily_per_founder]
     for q in queries:
         results = search_tool.search(q, max_results=4)
         all_results.extend(results)
@@ -172,7 +172,7 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
 
     # Phase 2: pick top URLs to extract (with disambiguation gate).
     candidate_urls = _rank_for_extraction(all_results, founder, company)[
-        : SETTINGS.max_extracts_per_founder
+        : config_module.SETTINGS.max_extracts_per_founder
     ]
     extracts: list[tuple[str, str]] = []
     for url in candidate_urls:
@@ -223,7 +223,7 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
         )
         try:
             bundle, llm_cost = call_structured(
-                RawFactBundle, prompt_a, model=SETTINGS.model_extract,
+                RawFactBundle, prompt_a, model=config_module.SETTINGS.model_extract,
                 llm_calls_so_far=base_llm_calls + cost.llm_calls,
             )
             cost = cost.merged(llm_cost)

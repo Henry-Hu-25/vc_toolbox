@@ -8,7 +8,7 @@ from typing import Any
 
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from ..config import SETTINGS
+from .. import config as config_module
 
 log = logging.getLogger(__name__)
 
@@ -45,9 +45,9 @@ _EXTRACT_CACHE: dict[str, ExtractResult] = {}
 def _client() -> Any:
     if TavilyClient is None:
         raise TavilyError("tavily-python is not installed in this environment.")
-    if not SETTINGS.tavily_api_key:
+    if not config_module.SETTINGS.tavily_api_key:
         raise TavilyError("TAVILY_API_KEY is not set.")
-    return TavilyClient(api_key=SETTINGS.tavily_api_key)
+    return TavilyClient(api_key=config_module.SETTINGS.tavily_api_key)
 
 
 @retry(

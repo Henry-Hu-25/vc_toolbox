@@ -8,7 +8,7 @@ from dataclasses import dataclass
 import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from ..config import SETTINGS
+from .. import config as config_module
 
 log = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ class FetchError(RuntimeError):
 )
 def _do_get(url: str) -> httpx.Response:
     with httpx.Client(
-        timeout=SETTINGS.http_timeout,
+        timeout=config_module.SETTINGS.http_timeout,
         follow_redirects=True,
         headers={"User-Agent": _USER_AGENT},
     ) as client:

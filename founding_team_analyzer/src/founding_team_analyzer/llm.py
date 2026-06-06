@@ -10,7 +10,7 @@ from typing import Any, Type, TypeVar
 from pydantic import BaseModel, ValidationError
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
-from .config import SETTINGS
+from . import config as config_module
 from .schemas import CostLedger
 
 log = logging.getLogger(__name__)
@@ -44,16 +44,16 @@ def _is_reasoning_family(model: str) -> bool:
 def _make_chat(model: str, effort: str | None = None) -> Any:
     if ChatOpenAI is None:
         raise RuntimeError("langchain-openai is not installed.")
-    if not SETTINGS.openai_api_key:
+    if not config_module.SETTINGS.openai_api_key:
         raise RuntimeError("OPENAI_API_KEY is not set.")
     kwargs: dict[str, Any] = {
         "model": model,
-        "api_key": SETTINGS.openai_api_key,
+        "api_key": config_module.SETTINGS.openai_api_key,
     }
     if _is_reasoning_family(model):
         # gpt-5 family ignores `temperature` and uses `reasoning_effort` instead.
         # langchain-openai exposes this via the model_kwargs / reasoning_effort param.
-        kwargs["reasoning_effort"] = effort or SETTINGS.reasoning_effort
+        kwargs["reasoning_effort"] = effort or config_module.SETTINGS.reasoning_effort
     else:
         kwargs["temperature"] = 0
     return ChatOpenAI(**kwargs)
@@ -92,7 +92,7 @@ def call_structured(
     This replaces the former global _call_counter so concurrent runs have
     independent budgets.
     """
-    budget = max_llm_calls if max_llm_calls is not None else SETTINGS.max_llm_calls
+    budget = max_llm_calls if max_llm_calls is not None else config_module.SETTINGS.max_llm_calls
     if llm_calls_so_far >= budget:
         log.warning("LLM call budget reached (%d/%d); returning empty result.", llm_calls_so_far, budget)
         # Best-effort: return a default-constructed instance (works when all fields optional).
@@ -102,13 +102,13 @@ def call_structured(
             raise LLMBudgetExceeded(
                 f"LLM budget exhausted and {schema.__name__} requires fields with no defaults."
             )
-    chosen_model = model or SETTINGS.model_reasoning
+    chosen_model = model or config_module.SETTINGS.model_reasoning
     # Default effort: reasoning-tier for the reasoning model, low for the extraction model.
     if effort is None:
-        if chosen_model == SETTINGS.model_extract and chosen_model != SETTINGS.model_reasoning:
-            effort = SETTINGS.extract_effort
+        if chosen_model == config_module.SETTINGS.model_extract and chosen_model != config_module.SETTINGS.model_reasoning:
+            effort = config_module.SETTINGS.extract_effort
         else:
-            effort = SETTINGS.reasoning_effort
+            effort = config_module.SETTINGS.reasoning_effort
     chat = _make_chat(chosen_model, effort=effort)
     try:
         result = _invoke_structured(chat, schema, prompt)

@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from ..config import SETTINGS
+from .. import config as config_module
 from ..schemas import (
     Company,
     CostLedger,
@@ -286,7 +286,7 @@ def run(state: AnalyzerState) -> dict[str, Any]:
     payload = _build_json(state)
 
     slug = slugify(company.name if company else (state.get("raw_input") or "report"))
-    out_root = Path(SETTINGS.output_dir) / slug
+    out_root = Path(config_module.SETTINGS.output_dir) / slug
     try:
         out_root.mkdir(parents=True, exist_ok=True)
         (out_root / "report.md").write_text(md, encoding="utf-8")
