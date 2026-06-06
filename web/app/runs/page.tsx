@@ -93,6 +93,7 @@ export default function RunsPage() {
                     <th className="text-left px-4 py-3 font-medium">Tier</th>
                     <th className="text-right px-4 py-3 font-medium">Score</th>
                     <th className="text-right px-4 py-3 font-medium">Generated</th>
+                    <th className="text-right px-4 py-3 font-medium">Modified</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -142,7 +143,10 @@ export default function RunsPage() {
                             : "—"}
                         </td>
                         <td className="px-4 py-3 text-right text-xs text-muted-fg font-mono">
-                          {formatDate(it.generated_at || it.modified_at)}
+                          {formatDate(it.generated_at)}
+                        </td>
+                        <td className="px-4 py-3 text-right text-xs text-muted-fg font-mono">
+                          {formatDate(it.modified_at)}
                         </td>
                       </tr>
                     );
