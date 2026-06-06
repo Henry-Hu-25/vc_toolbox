@@ -58,6 +58,7 @@ interface RunState {
   error: string | null;
   slug: string | null;
   _unsubscribe: (() => void) | null;
+  _hydrating: boolean;
 }
 
 interface RunActions {
@@ -81,6 +82,7 @@ const INITIAL: RunState = {
   error: null,
   slug: null,
   _unsubscribe: null,
+  _hydrating: false,
 };
 
 export const useRunStore = create<Store>()(
@@ -103,6 +105,7 @@ export const useRunStore = create<Store>()(
           status: "pending",
           input,
           _unsubscribe: null,
+          _hydrating: false,
         });
         const resp = await startAnalyze(input, opts);
         set({ runId: resp.run_id, status: resp.status });
@@ -137,10 +140,16 @@ export const useRunStore = create<Store>()(
       },
 
       hydrate: async () => {
-        const { runId } = get();
+        const runId = get().runId;
         if (!runId) return;
+        set({ _hydrating: true });
         try {
           const status = await getRunStatus(runId);
+          // If startRun() was called while we were awaiting, it won the race.
+          // Do not overwrite its state or subscribe to the stale runId.
+          const current = get();
+          if (!current._hydrating || current.runId !== runId) return;
+
           if (
             status.status === "completed" ||
             status.status === "failed" ||
@@ -150,6 +159,7 @@ export const useRunStore = create<Store>()(
               status: status.status,
               slug: status.report_slug ?? status.slug ?? null,
               error: status.error ?? null,
+              _hydrating: false,
             });
             return;
           }
@@ -157,12 +167,17 @@ export const useRunStore = create<Store>()(
             status: status.status,
             input: status.input,
             slug: status.report_slug ?? null,
+            _hydrating: false,
           });
           get().subscribe(runId);
         } catch (err) {
           const msg = (err as Error).message || "";
           if (msg.includes("not found") || msg.includes("404")) {
-            set({ ...INITIAL, steps: initialSteps(), _unsubscribe: null });
+            // Only reset if no startRun has claimed the store in the meantime.
+            const current = get();
+            if (current._hydrating && current.runId === runId) {
+              set({ ...INITIAL, steps: initialSteps(), _unsubscribe: null, _hydrating: false });
+            }
           }
         }
       },
