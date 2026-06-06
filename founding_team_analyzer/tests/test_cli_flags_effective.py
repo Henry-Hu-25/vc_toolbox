@@ -60,6 +60,7 @@ class _SettingsOverride:
             "max_tavily_per_founder": 8,
             "max_extracts_per_founder": 4,
             "max_llm_calls": 30,
+            "max_registry_runs": 100,
             "http_timeout": 15,
             "output_dir": Path("./out"),
         }

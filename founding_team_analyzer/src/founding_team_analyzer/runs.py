@@ -57,10 +57,16 @@ class RunRecord:
 
 
 class RunRegistry:
-    """Thread-unsafe but asyncio-safe registry of in-flight runs."""
+    """Thread-unsafe but asyncio-safe registry of in-flight runs.
 
-    def __init__(self) -> None:
+    When the number of runs exceeds ``max_runs``, the oldest terminal
+    runs are evicted first.  In-flight (non-terminal) runs are never
+    evicted.
+    """
+
+    def __init__(self, max_runs: int = 100) -> None:
         self._runs: dict[str, RunRecord] = {}
+        self._max_runs: int = max_runs
 
     # ----- lifecycle -----
 
@@ -74,7 +80,28 @@ class RunRegistry:
             run_id = str(uuid.uuid4())
         record = RunRecord(id=run_id, input=input, task=task)
         self._runs[run_id] = record
+        self._evict_if_full()
         return record
+
+    def _evict_if_full(self) -> None:
+        """Evict oldest terminal runs when the registry exceeds ``_max_runs``.
+
+        In-flight (non-terminal) runs are never evicted.  Among terminal
+        runs, the one with the oldest ``updated_at`` is removed first.
+        """
+        while len(self._runs) > self._max_runs:
+            # Find the oldest terminal run.
+            oldest_terminal: Optional[RunRecord] = None
+            for rec in self._runs.values():
+                if rec.status not in TERMINAL_STATUSES:
+                    continue
+                if oldest_terminal is None or rec.updated_at < oldest_terminal.updated_at:
+                    oldest_terminal = rec
+            # If no terminal run exists to evict, we can't shrink further
+            # (all remaining runs are in-flight).  Stop.
+            if oldest_terminal is None:
+                break
+            del self._runs[oldest_terminal.id]
 
     def get(self, run_id: str) -> Optional[RunRecord]:
         return self._runs.get(run_id)
@@ -210,3 +237,13 @@ class RunRegistry:
 
 
 REGISTRY = RunRegistry()
+
+# Re-initialize with the configured max when the config module is
+# available (server context).  The bare default (100) is fine for
+# direct module usage (e.g. tests that construct their own registry).
+try:
+    from . import config as _config  # noqa: E402
+
+    REGISTRY = RunRegistry(max_runs=_config.SETTINGS.max_registry_runs)
+except Exception:  # pragma: no cover - config import may fail in isolated tests
+    pass

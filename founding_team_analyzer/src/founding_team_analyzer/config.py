@@ -41,6 +41,7 @@ class Settings:
     max_tavily_per_founder: int
     max_extracts_per_founder: int
     max_llm_calls: int
+    max_registry_runs: int
     http_timeout: int
     output_dir: Path
 
@@ -57,6 +58,7 @@ class Settings:
             max_tavily_per_founder=_int_env("FTA_MAX_TAVILY_PER_FOUNDER", 8),
             max_extracts_per_founder=_int_env("FTA_MAX_EXTRACTS_PER_FOUNDER", 4),
             max_llm_calls=_int_env("FTA_MAX_LLM_CALLS", 30),
+            max_registry_runs=_int_env("FTA_MAX_REGISTRY_RUNS", 100),
             http_timeout=_int_env("FTA_HTTP_TIMEOUT", 15),
             output_dir=Path(os.getenv("FTA_OUTPUT_DIR", "./out")),
         )
