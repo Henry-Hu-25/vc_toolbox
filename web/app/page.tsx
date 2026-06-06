@@ -1,6 +1,7 @@
 import { AnalyzeForm } from "@/components/analyze-form";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
+import { LiveModelName } from "@/components/live-model-name";
 
 export default function HomePage() {
   return (
@@ -31,7 +32,7 @@ export default function HomePage() {
 }
 
 function FeatureGrid() {
-  const items = [
+  const cards = [
     {
       title: "Six specialist agents",
       body: "Profiler, FounderFinder, Researcher (fan-out), OverlapAnalyzer, Scorer, ReportWriter.",
@@ -41,18 +42,24 @@ function FeatureGrid() {
       body: "Every score cites a source URL. Anti-collision gates drop look-alike profiles.",
     },
     {
-      title: "Powered by GPT-5.5",
+      title: null,
       body: "Frontier reasoning with structured outputs and a tight per-run budget.",
     },
   ];
   return (
     <div className="mt-16 grid sm:grid-cols-3 gap-4">
-      {items.map((it) => (
+      {cards.map((it, i) => (
         <div
-          key={it.title}
+          key={i}
           className="rounded-lg border border-border bg-card p-5"
         >
-          <h3 className="font-medium text-sm">{it.title}</h3>
+          <h3 className="font-medium text-sm">
+            {it.title ?? (
+              <>
+                Powered by <LiveModelName />
+              </>
+            )}
+          </h3>
           <p className="text-xs text-muted-fg mt-1.5 leading-relaxed">
             {it.body}
           </p>
