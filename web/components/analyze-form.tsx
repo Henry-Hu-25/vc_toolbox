@@ -15,10 +15,20 @@ import { cn } from "@/lib/utils";
 
 const EXAMPLES = ["Vellum AI", "Cursor", "Perplexity"];
 
+function formatElapsed(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+    .toString()
+    .padStart(2, "0");
+  const s = (seconds % 60).toString().padStart(2, "0");
+  return `${m}:${s}`;
+}
+
 export function AnalyzeForm() {
   const router = useRouter();
   const [value, setValue] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
+  const [elapsed, setElapsed] = React.useState(0);
+  const startRef = React.useRef<number | null>(null);
 
   const status = useRunStore((s) => s.status);
   const input = useRunStore((s) => s.input);
@@ -81,6 +91,25 @@ export function AnalyzeForm() {
       return () => clearTimeout(t);
     }
   }, [status, slug, router, isStaleCompletion]);
+
+  // Elapsed-time timer: ticks every second while a run is pending/running,
+  // stops and freezes when the status transitions to a terminal state.
+  React.useEffect(() => {
+    if (running) {
+      if (startRef.current === null) {
+        startRef.current = Date.now();
+        setElapsed(0);
+      }
+      const id = setInterval(() => {
+        if (startRef.current !== null) {
+          setElapsed(Math.floor((Date.now() - startRef.current) / 1000));
+        }
+      }, 1000);
+      return () => clearInterval(id);
+    }
+    // Not running: stop ticking, clear start ref so next run resets.
+    startRef.current = null;
+  }, [running]);
 
   return (
     <Card className="w-full overflow-hidden">
@@ -156,7 +185,16 @@ export function AnalyzeForm() {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs uppercase tracking-wider text-muted-fg">
-                    {status === "cancelled" ? "Cancelled" : "Analyzing"}
+                    {status === "cancelled"
+                      ? "Cancelled"
+                      : status === "failed"
+                        ? "Failed"
+                        : "Analyzing"}
+                    {running && (
+                      <span className="ml-2 tabular-nums font-medium text-fg">
+                        {formatElapsed(elapsed)}
+                      </span>
+                    )}
                   </p>
                   <h2 className="text-xl font-semibold mt-1 break-all">
                     {input}
