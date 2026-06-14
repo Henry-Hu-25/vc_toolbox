@@ -132,8 +132,16 @@ export const useRunStore = create<Store>()(
           runId,
           (evt) => get()._applyEvent(evt),
           {
-            onError: (err) =>
-              set({ error: err.message || "subscription failed" }),
+            onError: (err) => {
+              // Only surface subscription errors for non-terminal runs.
+              // Terminal runs won't receive more events, so the error
+              // would just be a stale artifact. The next successful
+              // event via _applyEvent clears this field automatically.
+              const s = get().status;
+              if (s !== "completed" && s !== "failed" && s !== "cancelled") {
+                set({ error: err.message || "subscription failed" });
+              }
+            },
           },
         );
         set({ _unsubscribe: unsub });
@@ -180,7 +188,9 @@ export const useRunStore = create<Store>()(
             set({
               status: status.status,
               slug: status.report_slug ?? status.slug ?? null,
-              error: status.error ?? null,
+              // Cancelled runs must not surface an error — the cancelled
+              // panel is the correct UX, not the "Run failed" error box.
+              error: status.status === "cancelled" ? null : (status.error ?? null),
               _hydrating: false,
             });
             return;
@@ -210,6 +220,8 @@ export const useRunStore = create<Store>()(
           const steps = state.steps.map((s) => ({ ...s }));
           if (event.type === "run_started") {
             next.status = "running";
+            // Clear stale SSE subscription errors — events are flowing again
+            if (state.error) next.error = null;
           } else if (event.type === "node_started") {
             const node = String(event.payload.node);
             const idx = steps.findIndex((s) => s.id === node);
@@ -220,6 +232,8 @@ export const useRunStore = create<Store>()(
               steps[idx].state = "running";
             }
             next.status = "running";
+            // Clear stale SSE subscription errors — events are flowing again
+            if (state.error) next.error = null;
           } else if (event.type === "node_finished") {
             const node = String(event.payload.node);
             const idx = steps.findIndex((s) => s.id === node);
@@ -234,6 +248,8 @@ export const useRunStore = create<Store>()(
             ];
           } else if (event.type === "cost_update") {
             next.cost = event.payload as unknown as CostLedger;
+            // Clear stale SSE subscription errors — events are flowing again
+            if (state.error) next.error = null;
           } else if (event.type === "done") {
             const slug = String(event.payload.slug || "");
             for (const s of steps) {

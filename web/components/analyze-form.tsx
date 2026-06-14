@@ -250,7 +250,7 @@ export function AnalyzeForm() {
                 </div>
               )}
 
-              {error && (
+              {error && status !== "cancelled" && (
                 <div className="rounded-md border border-rose-500/30 dark:border-rose-500/40 bg-rose-500/10 dark:bg-rose-500/20 p-3 text-sm text-rose-700 dark:text-rose-300">
                   <p className="font-medium">Run failed</p>
                   <p className="text-xs mt-1 break-all">{error}</p>
