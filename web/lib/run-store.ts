@@ -130,17 +130,31 @@ export const useRunStore = create<Store>()(
         if (prev) prev();
         const unsub = subscribeRunEvents(
           runId,
-          (evt) => get()._applyEvent(evt),
+          (evt) => {
+            // Guard against stale events from a previous subscription.
+            // After reset() clears runId or startRun() sets a new one,
+            // late-arriving SSE events from the old subscription must be
+            // dropped so they don't overwrite the reset state (e.g.
+            // restoring status="failed" after the user clicked "Try again").
+            if (get().runId !== runId) return;
+            get()._applyEvent(evt);
+          },
           {
             onError: (err) => {
-              // Only surface subscription errors for non-terminal runs.
-              // Terminal runs won't receive more events, so the error
-              // would just be a stale artifact. The next successful
-              // event via _applyEvent clears this field automatically.
-              const s = get().status;
-              if (s !== "completed" && s !== "failed" && s !== "cancelled") {
-                set({ error: err.message || "subscription failed" });
+              // Only surface subscription errors for non-terminal runs
+              // that belong to the current subscription.  The runId guard
+              // prevents stale on-error callbacks (fired after abort) from
+              // injecting an error into a reset or new-run store state.
+              const s = get();
+              if (
+                s.runId !== runId ||
+                s.status === "completed" ||
+                s.status === "failed" ||
+                s.status === "cancelled"
+              ) {
+                return;
               }
+              set({ error: err.message || "subscription failed" });
             },
           },
         );
