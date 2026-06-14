@@ -65,7 +65,7 @@ interface RunState {
 interface RunActions {
   startRun: (input: string, opts?: { no_self_critique?: boolean }) => Promise<string>;
   subscribe: (runId: string) => void;
-  cancelRun: () => Promise<void>;
+  cancelRun: (targetRunId?: string) => Promise<void>;
   hydrate: () => Promise<void>;
   reset: () => void;
   _applyEvent: (event: StreamEvent) => void;
@@ -139,16 +139,23 @@ export const useRunStore = create<Store>()(
         set({ _unsubscribe: unsub });
       },
 
-      cancelRun: async () => {
+      cancelRun: async (targetRunId?: string) => {
         const { runId, _unsubscribe } = get();
-        if (!runId) return;
-        // Optimistic: unsubscribe and set cancelled BEFORE the DELETE round-trip
-        // so the UI never flashes "Run failed" from a trailing error event.
-        if (_unsubscribe) _unsubscribe();
-        set({ status: "cancelled", error: null, _unsubscribe: null });
-        // Fire-and-forget DELETE (best effort — UI state is already set)
+        const effectiveRunId = targetRunId ?? runId;
+        if (!effectiveRunId) return;
+
+        // If cancelling the store's tracked run, do the full optimistic cancel
+        // (unsubscribe + set status) BEFORE the DELETE round-trip so the UI
+        // never flashes "Run failed" from a trailing error event.
+        if (effectiveRunId === runId) {
+          if (_unsubscribe) _unsubscribe();
+          set({ status: "cancelled", error: null, _unsubscribe: null });
+        }
+
+        // Fire-and-forget DELETE (best effort — UI state is already set
+        // when cancelling the tracked run)
         try {
-          await apiCancelRun(runId);
+          await apiCancelRun(effectiveRunId);
         } catch {
           // best effort — UI state is already cancelled
         }

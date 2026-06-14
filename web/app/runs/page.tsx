@@ -2,8 +2,10 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { X } from "lucide-react";
 import { listRuns } from "@/lib/api";
 import type { RunSummary } from "@/lib/types";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TierBadge } from "@/components/tier-badge";
@@ -14,7 +16,9 @@ import { useRunStore } from "@/lib/run-store";
 export default function RunsPage() {
   const [items, setItems] = React.useState<RunSummary[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [cancellingId, setCancellingId] = React.useState<string | null>(null);
   const status = useRunStore((s) => s.status);
+  const cancelRun = useRunStore((s) => s.cancelRun);
   const prevStatusRef = React.useRef(status);
 
   const refresh = React.useCallback(() => {
@@ -94,6 +98,7 @@ export default function RunsPage() {
                     <th className="text-right px-4 py-3 font-medium">Score</th>
                     <th className="text-right px-4 py-3 font-medium">Generated</th>
                     <th className="text-right px-4 py-3 font-medium">Modified</th>
+                    <th className="px-4 py-3 w-20"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -147,6 +152,25 @@ export default function RunsPage() {
                         </td>
                         <td className="px-4 py-3 text-right text-xs text-muted-fg font-mono">
                           {formatDate(it.modified_at)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {inFlight && it.run_id && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              aria-label="Cancel run"
+                              disabled={cancellingId === it.run_id}
+                              onClick={async () => {
+                                setCancellingId(it.run_id!);
+                                await cancelRun(it.run_id);
+                                refresh();
+                                setCancellingId(null);
+                              }}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                              Cancel
+                            </Button>
+                          )}
                         </td>
                       </tr>
                     );
