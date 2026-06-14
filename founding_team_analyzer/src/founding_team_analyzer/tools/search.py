@@ -24,12 +24,14 @@ try:  # Tavily error classes — optional at import time for tests.
         ForbiddenError,
         InvalidAPIKeyError,
         UsageLimitExceededError,
+        TimeoutError as TavilyTimeoutError,
     )
 except Exception:  # pragma: no cover
     BadRequestError = None  # type: ignore[assignment,misc]
     ForbiddenError = None  # type: ignore[assignment,misc]
     InvalidAPIKeyError = None  # type: ignore[assignment,misc]
     UsageLimitExceededError = None  # type: ignore[assignment,misc]
+    TavilyTimeoutError = None  # type: ignore[assignment,misc]
 
 
 @dataclass
@@ -108,13 +110,8 @@ def _should_retry(exc: BaseException) -> bool:
         return True
 
     # Tavily TimeoutError wraps requests Timeout — also retry
-    try:
-        from tavily.errors import TimeoutError as TavilyTimeout  # type: ignore
-
-        if isinstance(exc, TavilyTimeout):
-            return True
-    except Exception:  # pragma: no cover
-        pass
+    if TavilyTimeoutError is not None and isinstance(exc, TavilyTimeoutError):
+        return True
 
     # Anything else is unexpected — don't retry
     return False

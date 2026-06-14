@@ -569,6 +569,98 @@ async def test_run_started_payload_includes_all_nodes():
 
 
 # ---------------------------------------------------------------------------
+# Exception during fan-out: buffer must be flushed before error event
+# ---------------------------------------------------------------------------
+
+
+class _FanOutCrashGraph:
+    """Simulates a graph that crashes mid-fan-out: company_profiler and
+    the first founder_researcher sub-invocation succeed, but a second
+    sub-invocation raises an exception.  The streaming_graph must flush
+    the buffered node_finished for the fan-out before emitting the
+    error event.
+    """
+
+    async def astream(self, initial, **kwargs):
+        # company_profiler succeeds
+        yield {
+            "company_profiler": {
+                "company": Company(name="CrashCo"),
+                "warnings": [],
+                "cost": CostLedger(llm_calls=1),
+            }
+        }
+        # First researcher sub-invocation succeeds
+        yield {
+            "founder_researcher": {
+                "profiles": [FounderProfile(name="F1", current_title="CEO")],
+                "warnings": [],
+                "cost": CostLedger(llm_calls=1, tavily_searches=1),
+            }
+        }
+        # Second researcher sub-invocation raises
+        raise RuntimeError("simulated fan-out crash")
+
+
+@pytest.mark.asyncio
+async def test_exception_during_fan_out_flushes_buffer():
+    """When an exception occurs mid-fan-out, the streaming_graph must
+    flush the buffered node_finished event for the fan-out node before
+    emitting the error event.  Every node_started must have a matching
+    node_finished in the final event stream, even when the pipeline
+    crashes."""
+    graph = _FanOutCrashGraph()
+
+    with patch.object(sg, "build_graph", return_value=graph):
+        events = [e async for e in sg.stream_analysis("CrashCo")]
+
+    # Verify there is an error event
+    error_events = _events_by_type(events, "error")
+    assert len(error_events) == 1, (
+        f"Expected 1 error event, got {len(error_events)}"
+    )
+    assert "simulated fan-out crash" in error_events[0].payload.get("message", "")
+
+    # Verify every node_started has a matching node_finished
+    started_nodes = [
+        e.payload["node"]
+        for e in events
+        if e.type == "node_started"
+    ]
+    finished_nodes = [
+        e.payload["node"]
+        for e in events
+        if e.type == "node_finished"
+    ]
+    assert set(started_nodes) == set(finished_nodes), (
+        f"node_started nodes {set(started_nodes)} must match "
+        f"node_finished nodes {set(finished_nodes)}"
+    )
+
+    # Specifically: founder_researcher must have been started and
+    # finished (flushed from buffer), even though it crashed mid-fan-out
+    assert "founder_researcher" in finished_nodes, (
+        "founder_researcher must have a node_finished (flushed from buffer) "
+        "even after exception during fan-out"
+    )
+
+    # The node_finished for the fan-out must come before the error event
+    researcher_finished_idx = None
+    error_idx = None
+    for i, e in enumerate(events):
+        if e.type == "node_finished" and e.payload.get("node") == "founder_researcher":
+            researcher_finished_idx = i
+        if e.type == "error":
+            error_idx = i
+    assert researcher_finished_idx is not None, "founder_researcher node_finished must be present"
+    assert error_idx is not None, "error event must be present"
+    assert researcher_finished_idx < error_idx, (
+        f"founder_researcher node_finished (idx {researcher_finished_idx}) "
+        f"must come before error (idx {error_idx})"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Utility
 # ---------------------------------------------------------------------------
 

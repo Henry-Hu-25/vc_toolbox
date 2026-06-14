@@ -275,3 +275,124 @@ def test_4xx_http_error_not_retried_search():
         f"got {client.search.call_count} (retries are occurring)."
     )
     assert result == []
+
+
+# ---------------------------------------------------------------------------
+# Extract() retry policy tests (comparable coverage to search() tests)
+# ---------------------------------------------------------------------------
+
+
+def test_timeout_retried_extract():
+    """tavily.errors.TimeoutError (transient timeout) MUST trigger retries
+    for extract.  After 2 timeouts + 1 success, the underlying client is
+    called 3 times."""
+    from tavily.errors import TimeoutError as TavilyTimeoutError
+
+    client = _mock_extract_client_transient_then_ok(n_failures=2, exc=TavilyTimeoutError(60))
+
+    search_module.reset_cache()
+
+    with patch.object(search_module, "_client", return_value=client):
+        result = extract("https://example.com")
+
+    assert client.extract.call_count == 3, (
+        f"Expected 3 calls to client.extract() for transient timeout "
+        f"(2 retries + 1 success), got {client.extract.call_count}"
+    )
+    assert result is not None
+    assert result.content == "Content"
+
+
+def test_connection_error_retried_extract():
+    """requests.exceptions.ConnectionError (transient) MUST trigger retries
+    for extract."""
+    conn_error = requests.exceptions.ConnectionError("connection refused")
+
+    client = _mock_extract_client_transient_then_ok(n_failures=1, exc=conn_error)
+
+    search_module.reset_cache()
+
+    with patch.object(search_module, "_client", return_value=client):
+        result = extract("https://example.com")
+
+    assert client.extract.call_count == 2, (
+        f"Expected 2 calls to client.extract() for transient connection error "
+        f"(1 retry + 1 success), got {client.extract.call_count}"
+    )
+    assert result is not None
+
+
+def test_429_rate_limit_retried_extract():
+    """UsageLimitExceededError (429 rate-limit) MUST trigger retries for
+    extract.  Rate limiting is a transient condition that should be
+    retried."""
+    from tavily.errors import UsageLimitExceededError
+
+    client = _mock_extract_client_transient_then_ok(
+        n_failures=1, exc=UsageLimitExceededError("rate limited")
+    )
+
+    search_module.reset_cache()
+
+    with patch.object(search_module, "_client", return_value=client):
+        result = extract("https://example.com")
+
+    assert client.extract.call_count == 2, (
+        f"Expected 2 calls to client.extract() for 429 rate-limit error "
+        f"(1 retry + 1 success), got {client.extract.call_count}"
+    )
+    assert result is not None
+
+
+def test_4xx_http_error_not_retried_extract():
+    """A requests.exceptions.HTTPError with a 4xx status code (other than
+    429) must NOT trigger retries for extract."""
+    mock_response = MagicMock()
+    mock_response.status_code = 422
+    http_error = requests.exceptions.HTTPError(response=mock_response)
+
+    client = _mock_client_that_raises(http_error)
+
+    search_module.reset_cache()
+
+    with patch.object(search_module, "_client", return_value=client):
+        result = extract("https://example.com")
+
+    assert client.extract.call_count == 1, (
+        f"Expected exactly 1 call to client.extract() for 422 HTTP error, "
+        f"got {client.extract.call_count} (retries are occurring)."
+    )
+    assert result is None
+
+
+def test_bad_request_400_not_retried_extract():
+    """BadRequestError (400) must NOT trigger a retry for extract."""
+    from tavily.errors import BadRequestError
+
+    client = _mock_client_that_raises(BadRequestError("bad request"))
+
+    search_module.reset_cache()
+
+    with patch.object(search_module, "_client", return_value=client):
+        result = extract("https://example.com")
+
+    assert client.extract.call_count == 1, (
+        f"Expected exactly 1 call to client.extract() for 400 error, "
+        f"got {client.extract.call_count} (retries are occurring)."
+    )
+    assert result is None
+
+
+def test_extract_returns_none_on_empty_url():
+    """extract() must return None for empty URL without making any client call."""
+    client = MagicMock()
+
+    search_module.reset_cache()
+
+    with patch.object(search_module, "_client", return_value=client):
+        result = extract("")
+
+    assert result is None
+    assert client.extract.call_count == 0, (
+        "Client should not be called for empty URL"
+    )

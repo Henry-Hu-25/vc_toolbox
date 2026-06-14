@@ -391,7 +391,9 @@ def test_single_founder_no_pairs():
 
 def test_same_employer_non_overlapping_years():
     """Two founders worked at the same company but at different, non-overlapping
-    times. The fallback should not count this as an overlap (no year overlap)."""
+    times. The fallback should classify this as 'weak' (shared employer but no
+    year overlap), not 'medium' or 'strong'. overall_strength must be
+    consistent with the pair strengths."""
     profiles = [
         _profile("Alice", employers=[_work("Acme Corp", start=2010, end=2015)]),
         _profile("Bob", employers=[_work("Acme Corp", start=2018, end=2023)]),
@@ -413,13 +415,16 @@ def test_same_employer_non_overlapping_years():
         result = overlap_run(state)
 
     overlaps = result["overlaps"]
-    # Non-overlapping years at same employer should not produce overlap
-    # (or at most produce 'none' strength pair)
     pair_strengths = [p.strength for p in overlaps.pairs]
-    # The fallback should check year overlap, so this should be 'none'
-    # unless the fallback only checks company name without year overlap
-    # Either way, overall_strength should be consistent with pair strengths
-    if all(s == "none" for s in pair_strengths):
-        assert overlaps.overall_strength == "none", (
-            f"overall_strength must be 'none' when all pairs are 'none'"
-        )
+    # Non-overlapping years at same employer -> 'weak' (shared employer
+    # but no year overlap).  This is NOT 'none' because they still share
+    # the same employer; it's NOT 'medium' because there are no
+    # overlapping years.
+    assert pair_strengths == ["weak"], (
+        f"Non-overlapping same employer should be 'weak', got {pair_strengths}"
+    )
+    # overall_strength must be consistent with pair strengths
+    assert overlaps.overall_strength == "weak", (
+        f"overall_strength must match max pair strength, "
+        f"got {overlaps.overall_strength} with pairs {pair_strengths}"
+    )

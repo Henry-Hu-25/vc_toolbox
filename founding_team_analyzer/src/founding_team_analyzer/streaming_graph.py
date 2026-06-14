@@ -195,6 +195,14 @@ async def stream_analysis(raw_input: str, *, no_self_critique: bool = False) -> 
 
     except Exception as exc:
         log.exception("streaming pipeline failed")
+        # Flush any buffered fan-out so the event stream always has a
+        # matching node_finished for every node_started — even when the
+        # pipeline crashes mid-fan-out.
+        if active_fan_out is not None:
+            _flush_fan_out()
+            for evt in _pending_events:
+                yield evt
+            _pending_events.clear()
         yield Event(type="error", payload={"message": str(exc)})
         return
 

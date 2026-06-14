@@ -55,6 +55,82 @@ async def test_concurrent_runs_independent_counters():
 
 
 # ---------------------------------------------------------------------------
+# VAL-BE-004 (extended): actual call_structured() per-run isolation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_concurrent_runs_independent_call_structured():
+    """Two concurrent runs that both use the real call_structured() code
+    path must have independent LLM call counters.
+
+    This test stubs only the low-level LLM I/O (_invoke_structured /
+    _make_chat) so the budget-check and per-run counter logic in
+    call_structured() itself runs for real.  Two async tasks interleave
+    calls; each task tracks its own llm_calls_so_far counter and passes
+    it to call_structured on every invocation.  After interleaving, each
+    task's counter must equal the number of calls it actually made.
+    """
+    fake_result = TeamScore(
+        criteria=[],
+        overall_0_100=0.0,
+        tier="Mixed",
+        top_strengths=[],
+        top_risks=[],
+        open_questions=[],
+    )
+
+    call_log: list[str] = []
+
+    def _fake_invoke(chat, schema, prompt):
+        # Record which run made the call (infer from prompt text)
+        call_log.append(prompt)
+        return fake_result
+
+    async def _run_task(label: str, n_calls: int) -> int:
+        """Simulate a single run making *n_calls* LLM calls through
+        call_structured, tracking llm_calls_so_far per invocation."""
+        llm_so_far = 0
+        for _ in range(n_calls):
+            _, cost = call_structured(
+                TeamScore,
+                label,
+                llm_calls_so_far=llm_so_far,
+                max_llm_calls=20,
+            )
+            llm_so_far += cost.llm_calls
+        return llm_so_far
+
+    with patch(
+        "founding_team_analyzer.llm._invoke_structured",
+        side_effect=_fake_invoke,
+    ), patch("founding_team_analyzer.llm._make_chat", return_value=None):
+        # Interleave two runs: A makes 7 calls, B makes 3
+        results = await asyncio.gather(
+            _run_task("Run-A", 7),
+            _run_task("Run-B", 3),
+        )
+
+    counter_a, counter_b = results
+    assert counter_a == 7, (
+        f"Run A per-run counter should be 7, got {counter_a}"
+    )
+    assert counter_b == 3, (
+        f"Run B per-run counter should be 3, got {counter_b}"
+    )
+
+    # Verify that both runs actually made calls (7 + 3 = 10 total)
+    assert len(call_log) == 10, (
+        f"Expected 10 total LLM calls, got {len(call_log)}"
+    )
+    # Verify each run's calls are tracked independently
+    a_calls = sum(1 for p in call_log if p == "Run-A")
+    b_calls = sum(1 for p in call_log if p == "Run-B")
+    assert a_calls == 7, f"Run A should have 7 logged calls, got {a_calls}"
+    assert b_calls == 3, f"Run B should have 3 logged calls, got {b_calls}"
+
+
+# ---------------------------------------------------------------------------
 # VAL-BE-005: Per-run budget enforcement is independent
 # ---------------------------------------------------------------------------
 
@@ -64,26 +140,40 @@ def test_counter_budget_exhausted_per_run():
 
     With max_llm_calls=5, run A makes 4 calls (under budget) and run B
     makes 6 calls (over budget). A should succeed, B should fail.
-    """
-    # Run A: 4 calls, budget=5 -> should be fine
-    result_a, cost_a = call_structured(
-        TeamScore,
-        "test prompt for A",
-        llm_calls_so_far=4,
-        max_llm_calls=5,
-    )
-    # Since 4 < 5, the call proceeds (even though it hits the LLM,
-    # we're just testing the budget check logic; the actual LLM call
-    # may fail but the budget check passes)
 
-    # Run B: 6 calls already made, budget=5 -> should hit budget
-    with pytest.raises(LLMBudgetExceeded):
-        call_structured(
+    The LLM is stubbed so no real API calls are made.
+    """
+    fake_result = TeamScore(
+        criteria=[],
+        overall_0_100=0.0,
+        tier="Mixed",
+        top_strengths=[],
+        top_risks=[],
+        open_questions=[],
+    )
+    fake_llm_cost = CostLedger(llm_calls=1)
+
+    with patch(
+        "founding_team_analyzer.llm._invoke_structured",
+        return_value=fake_result,
+    ), patch("founding_team_analyzer.llm._make_chat", return_value=None):
+        # Run A: 4 calls, budget=5 -> should be fine
+        result_a, cost_a = call_structured(
             TeamScore,
-            "test prompt for B",
-            llm_calls_so_far=5,
+            "test prompt for A",
+            llm_calls_so_far=4,
             max_llm_calls=5,
         )
+        assert result_a is not None, "Run A should succeed (4 < 5 budget)"
+
+        # Run B: 6 calls already made, budget=5 -> should hit budget
+        with pytest.raises(LLMBudgetExceeded):
+            call_structured(
+                TeamScore,
+                "test prompt for B",
+                llm_calls_so_far=5,
+                max_llm_calls=5,
+            )
 
     # Run A still fine after B exhausted its budget (independence)
     # This would fail with the old global counter because B's overruns

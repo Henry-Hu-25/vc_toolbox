@@ -36,7 +36,14 @@ def _candidate_team_pages(website: str | None) -> list[str]:
     return [urljoin(base, p) for p in ("about", "about-us", "team", "company", "founders")]
 
 
-def _gather_sources(company: Company) -> list[dict[str, str]]:
+def _gather_sources(company: Company) -> tuple[list[dict[str, str]], int]:
+    """Return (deduped sources, extract_invocation_count).
+
+    The extract count reflects the number of ``search_tool.extract()``
+    invocations, NOT the number of deduplicated results that survived
+    the URL-dedup pass below.  This mirrors the CompanyProfiler fix
+    (VAL-BE-012 / F-BE-006).
+    """
     items: list[dict[str, str]] = []
     queries = [
         f"{company.name} founders",
@@ -48,7 +55,9 @@ def _gather_sources(company: Company) -> list[dict[str, str]]:
         for r in search_tool.search(q, max_results=4):
             items.append({"title": r.title, "url": r.url, "content": r.content})
 
+    extract_count = 0
     for url in _candidate_team_pages(company.website):
+        extract_count += 1
         extracted = search_tool.extract(url)
         if extracted and extracted.content:
             items.append({"title": f"{company.name} team page", "url": extracted.url, "content": extracted.content})
@@ -61,7 +70,7 @@ def _gather_sources(company: Company) -> list[dict[str, str]]:
             continue
         seen.add(u)
         deduped.append(item)
-    return deduped
+    return deduped, extract_count
 
 
 def _filter_and_dedupe(raw_list: list[Founder], max_founders: int) -> tuple[list[Founder], list[str]]:
@@ -109,12 +118,10 @@ def run(state: AnalyzerState) -> dict[str, Any]:
             "cost": CostLedger(),
         }
 
-    sources = _gather_sources(company)
+    sources, extract_count = _gather_sources(company)
     cost = CostLedger(
         tavily_searches=4,
-        tavily_extracts=sum(
-            1 for item in sources if "team page" in (item.get("title") or "").lower()
-        ),
+        tavily_extracts=extract_count,
     )
     prior_llm_calls = (state.get("cost") or CostLedger()).llm_calls
     prompt = load_prompt("founder_finder").format(
