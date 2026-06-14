@@ -111,6 +111,18 @@ export function AnalyzeForm() {
     startRef.current = null;
   }, [running]);
 
+  // Scroll the live-run panel into view when it appears after a hash
+  // navigation (e.g., clicking the in-progress pill which links to /#live-run).
+  React.useEffect(() => {
+    if (showRunPanel && window.location.hash === "#live-run") {
+      // Small delay to let the animation settle before scrolling.
+      const t = setTimeout(() => {
+        document.getElementById("live-run")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 300);
+      return () => clearTimeout(t);
+    }
+  }, [showRunPanel]);
+
   return (
     <Card className="w-full overflow-hidden">
       <CardContent className="p-0">
@@ -175,6 +187,7 @@ export function AnalyzeForm() {
             </motion.form>
           ) : (
             <motion.div
+              id="live-run"
               key="run"
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}

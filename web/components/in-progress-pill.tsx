@@ -16,9 +16,9 @@ export function InProgressPill() {
 
   return (
     <Link
-      href="/"
-      className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
-      title={input ? `Analyzing ${input}` : "Run in progress"}
+      href="/#live-run"
+      aria-label={input ? `Analyzing ${input} — in progress` : "Run in progress"}
+      className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 transition-colors"
     >
       <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
       <span className="hidden sm:inline">Run in progress</span>
