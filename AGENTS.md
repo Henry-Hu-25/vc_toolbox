@@ -93,6 +93,11 @@ Tuning knobs (defaults in `config.py`):
 - `FTA_MAX_LLM_CALLS` — global per-run circuit breaker. If the budget is
   exhausted before `TeamScorer` runs, the run fails with "TeamScore requires
   fields with no defaults." Raise this knob (not the model) to fix.
+- `FTA_MAX_REGISTRY_RUNS` — max in-flight + terminal runs kept in the
+  in-memory registry (default 100). Oldest terminal runs are evicted when
+  the cap is exceeded.
+- `FTA_CORS_ORIGINS` — comma-separated CORS allowed origins. Defaults to
+  `http://localhost:3000,http://127.0.0.1:3000`.
 - `FTA_OUTPUT_DIR` (default `./out`)
 
 Frontend reads `NEXT_PUBLIC_API_BASE` (default `http://127.0.0.1:8000`).
@@ -105,9 +110,15 @@ Frontend reads `NEXT_PUBLIC_API_BASE` (default `http://127.0.0.1:8000`).
   double-duty: they're also `.with_structured_output(...)` targets for the
   LLM, so every required field must be obtainable from prompts or the run
   fails as in the budget case above.
-- All network I/O goes through `tenacity` + an `httpx` timeout. Never raise
-  out of a node — append a string to `state["warnings"]` and degrade.
-- LLM calls must go through `llm.py` so the global counter / budget applies.
+- All direct network I/O goes through `tenacity` + an `httpx` timeout. The
+  Tavily client is an exception — it wraps `requests` internally, so
+  `search.py` catches `requests.exceptions.*` instead. Never raise out of a
+  node — append a string to `state["warnings"]` and degrade.
+- LLM calls must go through `llm.py` so the per-run counter / budget applies.
+- Config must be accessed dynamically: use `from . import config as
+  config_module` and read `config_module.SETTINGS` at call time — never
+  `from .config import SETTINGS` which captures at import time and breaks
+  CLI overrides.
 - Logging via `structlog` (already configured); do not add `print()`.
 - New endpoints belong on the FastAPI app in `server.py`. Long-lived work
   must register a run via `REGISTRY.create(...)` and publish events through
@@ -123,6 +134,11 @@ Frontend reads `NEXT_PUBLIC_API_BASE` (default `http://127.0.0.1:8000`).
   before a new `subscribe`) tears down the EventSource.
 - New persisted fields must be added to the `partialize` allowlist; the
   `_unsubscribe` function reference must stay out of it.
+- When performing async operations in the Zustand store that may race with
+  user actions, use a transient boolean flag (underscore-prefixed, excluded
+  from `partialize`) to guard against stale mutations. The `_hydrating`
+  flag is an example: `hydrate()` sets it true; `startRun()` sets it false
+  to signal it won the race.
 - Tailwind classes follow the existing `cn(...)` + `clsx` convention
   (`lib/utils.ts`). Reuse primitives from `components/ui/*`.
 - `lib/types.ts` mirrors `schemas.py`. When you change a Pydantic model that
@@ -147,13 +163,20 @@ Frontend reads `NEXT_PUBLIC_API_BASE` (default `http://127.0.0.1:8000`).
    survive a follow-up `DELETE` if it's still awaiting. For tests that need
    to exercise cancellation against a long-running task, seed the registry
    directly (see `test_delete_endpoint_routes_to_registry`).
-4. **`AnalyzeForm` redirect logic.** On mount, if the persisted store is in
+4. **`_FAN_OUT_NODES` frozenset.** The `_FAN_OUT_NODES` frozenset in
+   `streaming_graph.py` must be manually kept in sync with `graph.py`
+   topology. Adding or removing fan-out nodes without updating this set
+   silently breaks the event-ordering invariant.
+5. **Atomic create-with-task.** `RunRegistry.create()` now accepts the
+   asyncio task and run_id atomically — there is no longer a separate
+   `attach_task()` step or race window between create and attach.
+6. **`AnalyzeForm` redirect logic.** On mount, if the persisted store is in
    a `completed` state, the form treats that as "stale" and renders the
    empty form (no redirect). The `staleSlugRef` is cleared the moment a new
    run goes `pending`/`running`, so fresh completions still auto-redirect.
    If you change this logic, regression-test the "click logo → back to /"
    flow manually.
-5. **LLM budget vs. required schema fields.** Reducing `FTA_MAX_LLM_CALLS`
+7. **LLM budget vs. required schema fields.** Reducing `FTA_MAX_LLM_CALLS`
    below what `TeamScorer` needs will surface as the "fields with no
    defaults" error. The graph can degrade other nodes via warnings, but
    `TeamScore` cannot be partial.
