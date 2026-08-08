@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: founding_team_analyzer
+    env:
+      # server.py returns 503 when these are absent, and the suite imports it. The LLM and
+      # Tavily clients are stubbed, so non-functional placeholders are sufficient. Never
+      # wire these to repository secrets or real keys.
+      OPENAI_API_KEY: ci-placeholder-key
+      TAVILY_API_KEY: ci-placeholder-key
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: founding_team_analyzer/pyproject.toml
+
+      - name: Install backend
+        run: pip install -e ".[dev,server]"
+
+      - name: Tests and coverage
+        # --cov must use the path form: the package-name form also instruments tests/ and
+        # inflates the total. -n 4 (not auto) keeps memory bounded on a 2-core runner.
+        run: python -m pytest -n 4 --cov=src/founding_team_analyzer --cov-fail-under=68
+
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install frontend
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
