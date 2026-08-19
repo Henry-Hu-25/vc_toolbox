@@ -62,3 +62,11 @@ jobs:
 
       - name: Typecheck
         run: npx tsc --noEmit
+
+      - name: Build
+        # Kept alongside the typecheck rather than folded into it: next build also
+        # exercises static generation and the server/client component boundary, which
+        # tsc --noEmit cannot see. Typecheck stays first so type errors fail faster.
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: npm run build
