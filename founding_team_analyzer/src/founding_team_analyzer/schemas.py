@@ -52,6 +52,7 @@ class Company(BaseModel):
     sub_sector: Optional[str] = None
     hq_location: Optional[str] = None
     founded_year: Optional[int] = None
+    employee_count: Optional[int] = None
     stage_signals: list[str] = Field(default_factory=list)
     source_urls: list[str] = Field(default_factory=list)
 
