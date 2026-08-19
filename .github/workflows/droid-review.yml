@@ -72,11 +72,8 @@ jobs:
           fetch-depth: 1
 
       - name: Run Droid Auto Review
-        # Pinned deliberately. On @main this job failed 9 consecutive runs starting
-        # 2026-08-07 while this workflow file was byte-identical: the only difference
-        # between the last success (2026-08-06, action SHA 2041e7c) and the failures
-        # (action SHA e5ae502) was the action's own commit. Re-evaluate the pin once
-        # upstream is confirmed working; a floating ref also defeats supply-chain review.
+        # Pinned to a SHA rather than @main so a third-party action cannot change under
+        # this repo without a reviewable commit. Bump it deliberately.
         uses: Factory-AI/droid-action@2041e7cc36d1390346bdaa6616e4bf7ac6b96b27
         with:
           factory_api_key: ${{ secrets.FACTORY_API_KEY }}
