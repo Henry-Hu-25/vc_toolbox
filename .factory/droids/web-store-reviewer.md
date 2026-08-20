@@ -65,17 +65,48 @@ the sequences that matter. If you cannot name the sequence, you do not have a fi
 
 ## Output
 
-If the diff breaks none of these rules, reply with exactly:
+Reply with one JSON object and nothing else. No prose before or after, no code fence.
 
-NO_FINDINGS
+```
+{
+  "comments": [
+    {
+      "path": "web/lib/run-store.ts",
+      "line": 308,
+      "severity": "P1",
+      "title": "Persisting _hydrating strands the race guard as permanently true",
+      "body": "`_hydrating` is a transient in-flight flag. Writing it to `localStorage` means a reload rehydrates it as `true`, so `hydrate()` can never win its race again and a resumed run stops updating.",
+      "suggestion": "        slug: state.slug,"
+    }
+  ],
+  "summary": "One frontend finding: a transient flag entered the persistence allowlist."
+}
+```
 
-Otherwise reply with GitHub-flavored markdown only, at most 3 findings, highest impact
-first, each in this shape:
+Rules for the fields:
 
-- **`path/to/file.tsx:LINE`** - the rule broken and the user-visible symptom in one or
-  two sentences. Then the concrete fix.
+- **At most 3 comments**, highest impact first. Never pad to reach three.
+- `path` is repository-relative, exactly as it appears in the diff.
+- `line` must be a line the diff actually **added or changed**, since that is where the
+  comment gets anchored. When the defect is a missing addition, such as a new field never
+  added to `partialize`, anchor to the changed line that created the obligation.
+- `severity` is `P1` when a user loses a run or the UI stops updating, `P2` for a wrong
+  state that self-corrects, `P3` for a convention slip.
+- `title` is one imperative line, no trailing period.
+- `body` names the rule broken and the **user-visible symptom**: what the user does and
+  what they see. Then the concrete fix. GitHub-flavored markdown is fine here.
+- `suggestion` is **optional**. Include it only when the fix replaces exactly the one line
+  you anchored to, and you can reproduce that line's full replacement text including its
+  original indentation. To suggest deleting a line, give the line that should replace it.
+  Omit it for any multi-line fix. A wrong suggestion is worse than none, because it is
+  one click from being committed.
+- `summary` is one or two sentences, or `""` when there are no comments.
 
-End with a single line: `Verdict: N frontend finding(s)`
+If the diff breaks none of these rules, return exactly:
+
+```
+{"comments": [], "summary": ""}
+```
 
 Do not comment on formatting, class-name ordering, component decomposition, or
 accessibility unless the diff introduces a concrete broken interaction.

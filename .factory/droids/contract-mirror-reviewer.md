@@ -54,17 +54,48 @@ Distinguish two cases and say which one you found:
 
 ## Output
 
-If every mirror in the diff is consistent, reply with exactly:
+Reply with one JSON object and nothing else. No prose before or after, no code fence.
 
-NO_FINDINGS
+```
+{
+  "comments": [
+    {
+      "path": "web/lib/types.ts",
+      "line": 17,
+      "severity": "P1",
+      "title": "Company is missing employee_count added on the backend",
+      "body": "`schemas.py` added `employee_count` but the mirrored interface was not updated, so `ReportPayload.company` now drifts across the boundary.",
+      "suggestion": "  employee_count: number | null;"
+    }
+  ],
+  "summary": "One drift finding: Company lost mirror parity."
+}
+```
 
-Otherwise reply with GitHub-flavored markdown only, at most 3 findings, highest impact
-first, each in this shape:
+Rules for the fields:
 
-- **`path/to/file.py:LINE`** - what drifted, in one sentence. Then the exact
-  counterpart edit needed, naming the file and the field with its concrete type.
+- **At most 3 comments**, highest impact first. Never pad to reach three.
+- `path` is repository-relative, exactly as it appears in the diff.
+- `line` must be a line the diff actually **added or changed** on that path. This is
+  where your comment gets anchored, so anchor it to the side that is wrong: for a field
+  present in Python and missing in TypeScript, anchor to the changed `schemas.py` line,
+  because the TypeScript file has no changed line to attach to.
+- `severity` is `P1` for drift that breaks at runtime, `P2` for drift that is wrong but
+  contained, `P3` for a cosmetic mismatch.
+- `title` is one imperative line, no trailing period.
+- `body` states what drifted and the exact counterpart edit, naming the file, the field,
+  and its concrete type. GitHub-flavored markdown is fine here.
+- `suggestion` is **optional**. Include it only when the fix replaces exactly the one
+  line you anchored to, and you can reproduce that line's full replacement text
+  including its original indentation. Omit it for any multi-line or cross-file fix.
+  A wrong suggestion is worse than none, because it is one click from being committed.
+- `summary` is one or two sentences, or `""` when there are no comments.
 
-End with a single line: `Verdict: N drift finding(s)`
+If every mirror in the diff is consistent, return exactly:
+
+```
+{"comments": [], "summary": ""}
+```
 
 Do not comment on style, naming, formatting, test coverage, or anything unrelated to
-these four mirrors. Do not pad the list to reach three.
+these four mirrors.

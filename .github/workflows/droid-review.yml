@@ -278,17 +278,12 @@ jobs:
             exit 0
           fi
 
-          printf '%s\n' "$result" > "$RUNNER_TEMP/result.md"
-          if grep -qx 'NO_FINDINGS' "$RUNNER_TEMP/result.md"; then
-            echo "status=clean" >> "$GITHUB_OUTPUT"
-          else
-            echo "status=findings" >> "$GITHUB_OUTPUT"
-          fi
+          # The posting step reads the raw envelope and parses the findings JSON out of
+          # .result itself, so nothing is reformatted between here and the review call.
+          echo "status=ok" >> "$GITHUB_OUTPUT"
 
-      - name: Post or update review comment
-        if: |
-          matrix.in_scope == 'true' &&
-          (steps.run.outputs.status == 'findings' || steps.run.outputs.status == 'clean')
+      - name: Submit review
+        if: matrix.in_scope == 'true' && steps.run.outputs.status == 'ok'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
@@ -296,39 +291,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           DROID_NAME: ${{ matrix.droid }}
           TITLE: ${{ matrix.title }}
-          STATUS: ${{ steps.run.outputs.status }}
         run: |
           set -euo pipefail
-          marker="<!-- droid-specialist: $DROID_NAME -->"
-
-          gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate > "$RUNNER_TEMP/comments.json"
-          existing="$(jq -r --arg m "$marker" \
-            '[.[] | select(.body | startswith($m))] | last | .id // empty' \
-            "$RUNNER_TEMP/comments.json")"
-
-          # A clean result only ever updates an existing comment. It never creates one,
-          # so a passing specialist stays invisible.
-          if [ "$STATUS" = "clean" ] && [ -z "$existing" ]; then
-            echo "Clean and no prior comment; nothing to post."
-            exit 0
-          fi
-
-          {
-            printf '%s\n' "$marker"
-            printf '### %s\n\n' "$TITLE"
-            if [ "$STATUS" = "clean" ]; then
-              printf 'No findings as of `%s`.\n' "$HEAD_SHA"
-            else
-              cat "$RUNNER_TEMP/result.md"
-            fi
-            printf '\n<sub>Specialist droid `%s` &middot; commit `%s`</sub>\n' \
-              "$DROID_NAME" "$HEAD_SHA"
-          } > "$RUNNER_TEMP/body.md"
-
-          if [ -n "$existing" ]; then
-            gh api -X PATCH "repos/$REPO/issues/comments/$existing" -F "body=@$RUNNER_TEMP/body.md"
-            echo "Updated comment $existing"
-          else
-            gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file "$RUNNER_TEMP/body.md"
-            echo "Posted new comment"
-          fi
+          python3 .github/scripts/post_specialist_review.py \
+            "$RUNNER_TEMP/out.json" "$RUNNER_TEMP/pr.diff"
