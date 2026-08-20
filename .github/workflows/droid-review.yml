@@ -138,8 +138,9 @@ jobs:
             echo "::warning title=Scope gate unresolved::in_scope was empty for ${{ matrix.droid }}; check the scope job outputs."
           fi
 
+      # Runs even for a skipped leg: the retraction step below needs the script on disk
+      # to clean up comments this droid left on an earlier push.
       - name: Checkout repository
-        if: matrix.in_scope == 'true'
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
@@ -281,6 +282,18 @@ jobs:
           # The posting step reads the raw envelope and parses the findings JSON out of
           # .result itself, so nothing is reformatted between here and the review call.
           echo "status=ok" >> "$GITHUB_OUTPUT"
+
+      # Retract-only path. A leg that is out of scope, or whose scoped diff is now empty,
+      # skips the droid entirely, so without this its comments from an earlier push would
+      # outlive the code they describe.
+      - name: Retract stale comments
+        if: matrix.in_scope != 'true' || steps.diff.outputs.empty == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          DROID_NAME: ${{ matrix.droid }}
+        run: python3 .github/scripts/post_specialist_review.py --retract-only
 
       - name: Submit review
         if: matrix.in_scope == 'true' && steps.run.outputs.status == 'ok'

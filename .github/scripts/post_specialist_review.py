@@ -68,25 +68,37 @@ def addressable_lines(diff_text: str) -> dict[str, set[int]]:
     lines: dict[str, set[int]] = {}
     path: str | None = None
     new_line = 0
+    in_hunk = False
     for raw in diff_text.splitlines():
+        if raw.startswith("diff --git "):
+            path, in_hunk = None, False
+            continue
         if raw.startswith("+++ "):
             target = raw[4:].strip()
             path = None if target == "/dev/null" else re.sub(r"^b/", "", target)
+            in_hunk = False
             continue
         if raw.startswith("@@"):
             m = re.search(r"\+(\d+)", raw)
             new_line = int(m.group(1)) if m else 0
+            in_hunk = new_line > 0
             continue
-        if path is None or new_line == 0:
+        if not in_hunk or path is None:
             continue
         if raw.startswith("+"):
             lines.setdefault(path, set()).add(new_line)
             new_line += 1
         elif raw.startswith("-") or raw.startswith("\\"):
             continue
-        else:  # context line
+        elif raw.startswith(" "):
             lines.setdefault(path, set()).add(new_line)
             new_line += 1
+        else:
+            # A hunk body only ever holds ' ', '+', '-' or '\' lines, and git emits a
+            # leading space even for a blank context line. Anything else is the next
+            # file's header or this job's own truncation footer, and counting it as
+            # context inflates the addressable set with lines GitHub will reject.
+            in_hunk = False
     return lines
 
 
@@ -161,22 +173,44 @@ def retract_prior_comments(repo: str, pr: int, token: str, droid: str) -> int:
 
 
 def main() -> int:
-    if len(sys.argv) != 3:
-        fail("usage: post_specialist_review.py <droid-output.json> <scoped.diff>")
+    retract_only = "--retract-only" in sys.argv[1:]
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    if not retract_only and len(args) != 2:
+        fail(
+            "usage: post_specialist_review.py <droid-output.json> <scoped.diff>\n"
+            "       post_specialist_review.py --retract-only"
+        )
 
     env = os.environ
-    for required in ("GH_TOKEN", "REPO", "PR_NUMBER", "HEAD_SHA", "DROID_NAME", "TITLE"):
-        if not env.get(required):
-            fail(f"missing required environment variable {required}")
+    required = ["GH_TOKEN", "REPO", "PR_NUMBER", "DROID_NAME"]
+    if not retract_only:
+        required += ["HEAD_SHA", "TITLE"]
+    for name in required:
+        if not env.get(name):
+            fail(f"missing required environment variable {name}")
 
     token = env["GH_TOKEN"]
     repo = env["REPO"]
     pr = int(env["PR_NUMBER"])
-    head_sha = env["HEAD_SHA"]
+    head_sha = env.get("HEAD_SHA", "")
     droid = env["DROID_NAME"]
-    title = env["TITLE"]
+    title = env.get("TITLE", droid)
 
-    raw = json.load(open(sys.argv[1], encoding="utf-8"))
+    # A leg that falls out of scope, or whose scoped diff is now empty, never reaches the
+    # droid at all. Its earlier comments describe code this PR no longer touches, so they
+    # are retracted here rather than left anchored to a vanished diff.
+    if retract_only:
+        try:
+            removed = retract_prior_comments(repo, pr, token, droid)
+        except RuntimeError as exc:
+            warn("Retraction failed", f"{droid}: {exc}")
+            print("status=unavailable")
+            return 0
+        print(f"{droid}: out of scope; retracted {removed} stale comment(s).")
+        print("status=clean")
+        return 0
+
+    raw = json.load(open(args[0], encoding="utf-8"))
     result_text = raw.get("result") if isinstance(raw, dict) else None
     if not isinstance(result_text, str) or not result_text.strip():
         fail("droid output had no usable `result` field")
@@ -205,7 +239,7 @@ def main() -> int:
         print("status=clean")
         return 0
 
-    with open(sys.argv[2], encoding="utf-8") as fh:
+    with open(args[1], encoding="utf-8") as fh:
         anchorable = addressable_lines(fh.read())
 
     inline: list[dict] = []
