@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from ..config import SETTINGS
 from ..llm import call_structured, load_prompt
 from ..schemas import Company, CostLedger
 from ..state import AnalyzerState
@@ -14,6 +15,15 @@ from ..tools.normalize import detect_input_type, ensure_scheme
 log = logging.getLogger(__name__)
 
 _GAPFILL_FIELDS = ("founded_year", "hq_location", "sector", "sub_sector")
+
+
+def _pick_primary_source(items: list[dict[str, str]]) -> dict[str, str]:
+    """Return the source most likely to describe the company itself."""
+    ranked = sorted(items, key=lambda it: len(it.get("content", "")), reverse=True)
+    print(f"[profiler] ranked {len(ranked)} sources, picking {ranked[0].get('url')}")
+    if len(ranked) > SETTINGS.max_extracts_per_founder:
+        return ranked[SETTINGS.max_extracts_per_founder - 1]
+    return ranked[0]
 
 
 def _build_sources_block(items: list[dict[str, str]]) -> str:
