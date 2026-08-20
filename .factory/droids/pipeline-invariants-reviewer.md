@@ -74,8 +74,7 @@ Reply with one JSON object and nothing else. No prose before or after, no code f
       "line": 8,
       "severity": "P1",
       "title": "SETTINGS imported at module scope ignores CLI overrides",
-      "body": "Invariant 3: this captures config at import time, so `FTA_*` overrides are silently dropped. Read `config_module.SETTINGS` inside the function instead.",
-      "suggestion": "from .. import config as config_module"
+      "body": "Invariant 3: this captures config at import time, so `FTA_*` overrides are silently dropped. Read `config_module.SETTINGS` inside the function instead."
     }
   ],
   "summary": "One invariant finding: config captured at import time."
@@ -96,11 +95,12 @@ Rules for the fields:
 - `title` is one imperative line, no trailing period.
 - `body` names the invariant number, the concrete runtime consequence, and the specific
   fix. GitHub-flavored markdown is fine here.
-- `suggestion` is **optional**. Include it only when the fix replaces exactly the one
-  line you anchored to, and you can reproduce that line's full replacement text
-  including its original indentation. Omit it for any multi-line fix, and for anything
-  needing a new `try`/`except` block. A wrong suggestion is worse than none, because it
-  is one click from being committed.
+- `suggestion` is **optional** and must satisfy one test: applying it on its own, with no
+  other edit, leaves the file correct and the build green. Swapping a module-scope
+  `SETTINGS` import fails that test, because every call site referencing `SETTINGS` would
+  raise `NameError`; report it without a suggestion. Also omit it for any multi-line fix
+  and for anything needing a new `try`/`except`. A wrong suggestion is worse than none,
+  because it is one click from being committed.
 - `summary` is one or two sentences, or `""` when there are no comments.
 
 If the diff violates no invariant, return exactly:

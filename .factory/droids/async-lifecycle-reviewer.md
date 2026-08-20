@@ -111,9 +111,10 @@ Rules for the fields:
 - `body` gives the defect, then the concrete interleaving or failure path that triggers
   it, then the fix. Keep it under 6 lines. GitHub-flavored markdown is fine here.
 - `suggestion` is **optional** and usually wrong for this domain, because lifecycle fixes
-  span multiple lines. Include it only when the fix is a single-line replacement whose
-  full text and indentation you can reproduce exactly. Otherwise omit it: a wrong
-  suggestion is worse than none, because it is one click from being committed.
+  span multiple lines: a missing terminal publish, a `try`/`finally`, a cancellation
+  guard. Include one only when the fix rewrites exactly the anchored line and applying it
+  alone, with no other edit, leaves the module correct and the tests green. Otherwise omit
+  it: a wrong suggestion is worse than none, because it is one click from being committed.
 - `summary` is one or two sentences, or `""` when there are no comments.
 
 If you find no defect you can demonstrate with a concrete sequence, return exactly:
