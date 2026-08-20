@@ -1,0 +1,47 @@
+# Backend deployment. Run from this directory: fly deploy
+#
+# Fly was chosen over a serverless target because this service cannot be serverless:
+# run state lives in an in-process registry, POST /api/analyze finishes before its work
+# does, and GET /api/runs/{id}/events holds an SSE stream open for the length of a run.
+# Rename the app if "vc-toolbox-api" is taken.
+
+app = "vc-toolbox-api"
+primary_region = "sjc"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8000"
+  # Points at the volume below so reports survive a deploy.
+  FTA_OUTPUT_DIR = "/data/out"
+
+# report_writer writes report.md and report.json per slug, and GET /api/runs lists that
+# directory, so without a volume every deploy would silently empty the run history.
+# Create it once before the first deploy:
+#   fly volumes create fta_data --size 1 --region sjc
+[mounts]
+  source = "fta_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+
+  # This service must run as exactly one always-on machine. The registry is per process,
+  # so a second machine would not see runs created on the first, and a stopped machine
+  # discards every in-flight run. Do not raise this with `fly scale count`.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/api/health"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "15s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"

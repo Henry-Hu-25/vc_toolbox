@@ -1,0 +1,28 @@
+# Secrets must never enter an image layer. Real keys live in .env on developer machines
+# and are supplied to the container as Fly secrets at runtime instead.
+.env
+.env.*
+!.env.example
+
+# Local virtualenv, and any build or test residue.
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Tests are not needed to serve traffic.
+tests/
+
+# Generated reports live on the mounted volume, not in the image.
+out/
+
+Dockerfile
+.dockerignore
+fly.toml
