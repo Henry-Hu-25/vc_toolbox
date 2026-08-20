@@ -54,17 +54,50 @@ Distinguish two cases and say which one you found:
 
 ## Output
 
-If every mirror in the diff is consistent, reply with exactly:
+Reply with one JSON object and nothing else. No prose before or after, no code fence.
 
-NO_FINDINGS
+```
+{
+  "comments": [
+    {
+      "path": "founding_team_analyzer/src/founding_team_analyzer/schemas.py",
+      "line": 55,
+      "severity": "P1",
+      "title": "Company gained employee_count with no TypeScript mirror",
+      "body": "This field crosses the wire but `Company` in `web/lib/types.ts` was not updated, so `ReportPayload.company` drifts. Add `employee_count: number | null;` to that interface."
+    }
+  ],
+  "summary": "One drift finding: Company lost mirror parity."
+}
+```
 
-Otherwise reply with GitHub-flavored markdown only, at most 3 findings, highest impact
-first, each in this shape:
+Rules for the fields:
 
-- **`path/to/file.py:LINE`** - what drifted, in one sentence. Then the exact
-  counterpart edit needed, naming the file and the field with its concrete type.
+- **At most 3 comments**, highest impact first. Never pad to reach three.
+- `path` is repository-relative, exactly as it appears in the diff.
+- `line` must be a line the diff actually **added or changed** on that path. This is
+  where your comment gets anchored, so anchor it to the side that is wrong: for a field
+  present in Python and missing in TypeScript, anchor to the changed `schemas.py` line,
+  because the TypeScript file has no changed line to attach to.
+- `severity` is `P1` for drift that breaks at runtime, `P2` for drift that is wrong but
+  contained, `P3` for a cosmetic mismatch.
+- `title` is one imperative line, no trailing period.
+- `body` states what drifted and the exact counterpart edit, naming the file, the field,
+  and its concrete type. GitHub-flavored markdown is fine here.
+- `suggestion` is **optional** and rarely applicable here. A suggestion can only ever
+  rewrite the single line you anchored to, in the file you anchored to, so it cannot
+  express "add a field to the other side of the boundary". Since almost every drift fix
+  lands in the file that did *not* change, **usually omit it**. Include one only when the
+  fix rewrites exactly the anchored line and applying it alone leaves both sides
+  consistent and the build green. A wrong suggestion is worse than none, because it is
+  one click from being committed.
+- `summary` is one or two sentences, or `""` when there are no comments.
 
-End with a single line: `Verdict: N drift finding(s)`
+If every mirror in the diff is consistent, return exactly:
+
+```
+{"comments": [], "summary": ""}
+```
 
 Do not comment on style, naming, formatting, test coverage, or anything unrelated to
-these four mirrors. Do not pad the list to reach three.
+these four mirrors.

@@ -64,16 +64,49 @@ it newly reachable.
 
 ## Output
 
-If the diff violates no invariant, reply with exactly:
+Reply with one JSON object and nothing else. No prose before or after, no code fence.
 
-NO_FINDINGS
+```
+{
+  "comments": [
+    {
+      "path": "founding_team_analyzer/src/founding_team_analyzer/nodes/example.py",
+      "line": 8,
+      "severity": "P1",
+      "title": "SETTINGS imported at module scope ignores CLI overrides",
+      "body": "Invariant 3: this captures config at import time, so `FTA_*` overrides are silently dropped. Read `config_module.SETTINGS` inside the function instead."
+    }
+  ],
+  "summary": "One invariant finding: config captured at import time."
+}
+```
 
-Otherwise reply with GitHub-flavored markdown only, at most 3 findings, highest impact
-first, each in this shape:
+Rules for the fields:
 
-- **`path/to/file.py:LINE`** - which invariant is broken and the concrete runtime
-  consequence, in one or two sentences. Then the specific fix.
+- **At most 3 comments**, highest impact first. Never pad to reach three.
+- `path` is repository-relative, exactly as it appears in the diff.
+- `line` must be a line the diff actually **added or changed**, since that is where the
+  comment gets anchored. For invariant 4, where the defect is the *absence* of a change
+  in `streaming_graph.py`, anchor to the changed `graph.py` line instead and say what is
+  missing.
+- `severity` is `P1` when the invariant break causes a failed or degraded run, `P2` when
+  the effect is contained, `P3` for a convention slip such as a missing
+  `from __future__ import annotations`.
+- `title` is one imperative line, no trailing period.
+- `body` names the invariant number, the concrete runtime consequence, and the specific
+  fix. GitHub-flavored markdown is fine here.
+- `suggestion` is **optional** and must satisfy one test: applying it on its own, with no
+  other edit, leaves the file correct and the build green. Swapping a module-scope
+  `SETTINGS` import fails that test, because every call site referencing `SETTINGS` would
+  raise `NameError`; report it without a suggestion. Also omit it for any multi-line fix
+  and for anything needing a new `try`/`except`. A wrong suggestion is worse than none,
+  because it is one click from being committed.
+- `summary` is one or two sentences, or `""` when there are no comments.
 
-End with a single line: `Verdict: N invariant finding(s)`
+If the diff violates no invariant, return exactly:
+
+```
+{"comments": [], "summary": ""}
+```
 
 Do not comment on style, naming, formatting, or architecture preferences.
