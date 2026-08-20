@@ -21,7 +21,6 @@ import asyncio
 import json
 import logging
 import uuid
-from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, AsyncIterator
@@ -176,7 +175,20 @@ def create_app() -> FastAPI:
         # The weights on a report's CriterionScore come from the LLM's
         # structured output; compute_overall prefers the rubric weight for a
         # known key, so this endpoint is the authoritative house weighting.
-        return {"criteria": [asdict(c) for c in RUBRIC]}
+        return {
+            "criteria": [
+                {
+                    "key": c.key,
+                    "label": c.label,
+                    "weight": c.weight,
+                    "anchorLow": c.anchor_0,
+                    "anchorMid": c.anchor_3,
+                    "anchorHigh": c.anchor_5,
+                    "evidenceHint": c.required_evidence,
+                }
+                for c in RUBRIC
+            ]
+        }
 
     @app.post("/api/analyze")
     async def analyze(req: AnalyzeRequest) -> dict[str, Any]:

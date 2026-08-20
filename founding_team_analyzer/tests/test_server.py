@@ -52,7 +52,7 @@ def test_rubric_endpoint(client):
     assert math.isclose(sum(it["weight"] for it in criteria), 1.0, abs_tol=1e-6)
     for it in criteria:
         assert it["label"]
-        assert it["anchor_0"] and it["anchor_3"] and it["anchor_5"]
+        assert it["anchorLow"] and it["anchorMid"] and it["anchorHigh"]
 
 
 def test_runs_list_empty(client):
