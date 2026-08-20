@@ -1,4 +1,10 @@
-import type { ReportPayload, RunStatus, RunSummary, StreamEvent } from "./types";
+import type {
+  ReportPayload,
+  RubricPayload,
+  RunStatus,
+  RunSummary,
+  StreamEvent,
+} from "./types";
 
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000";
@@ -6,6 +12,12 @@ export const API_BASE =
 export async function getHealth(): Promise<Record<string, unknown>> {
   const r = await fetch(`${API_BASE}/api/health`, { cache: "no-store" });
   if (!r.ok) throw new Error(`Health check failed: ${r.status}`);
+  return r.json();
+}
+
+export async function getRubric(): Promise<RubricPayload> {
+  const r = await fetch(`${API_BASE}/api/rubric`, { cache: "no-store" });
+  if (!r.ok) throw new Error(`getRubric: ${r.status}`);
   return r.json();
 }
 

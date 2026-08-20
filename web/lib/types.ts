@@ -97,6 +97,20 @@ export interface CriterionScore {
   rationale: string;
 }
 
+export interface RubricCriterion {
+  key: string;
+  label: string;
+  weight: number;
+  anchor_0: string;
+  anchor_3: string;
+  anchor_5: string;
+  required_evidence: string;
+}
+
+export interface RubricPayload {
+  criteria: RubricCriterion[];
+}
+
 export interface TeamScore {
   criteria: CriterionScore[];
   overall_0_100: number;
