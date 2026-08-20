@@ -19,10 +19,26 @@ venv/
 # Generated reports / outputs
 out/
 
+# Coverage artifacts
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+web/coverage/
+
 # Node / Next.js
 node_modules/
 .next/
 *.tsbuildinfo
+
+# Logs
+*.log
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
 
 # Misc
 .DS_Store

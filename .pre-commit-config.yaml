@@ -1,0 +1,43 @@
+# Local commit-time checks for vc_toolbox.
+#
+# Usage:  founding_team_analyzer/.venv/bin/pre-commit run --all-files
+#
+# Do NOT run `pre-commit install` in this checkout or in a git worktree of it. Inside a
+# worktree, hook paths resolve through $GIT_COMMON_DIR, so the install still writes into
+# the main checkout's .git/hooks.
+#
+# ---------------------------------------------------------------------------------------
+# Hook vs. CI split (policy, so a reader can tell a forgotten check from an omitted one)
+# ---------------------------------------------------------------------------------------
+# A check earns a hook only if it is fast, deterministic, and scoped to the files being
+# committed. Anything that has to consider the whole test suite or the whole project graph
+# runs in .github/workflows/ci.yml instead, where the wall-clock cost is paid once per push
+# rather than once per commit.
+#
+# Hook families, all file-scoped:
+#   - whitespace and end-of-file normalisation
+#   - config syntax: YAML, TOML
+#   - accident guards: merge-conflict markers, oversized blobs
+# Further file-scoped checks (Python lint/format and type checking, web format/lint) join
+# this chain as each one becomes green on the tree; a check is never wired here first and
+# fixed later.
+#
+# Deliberately CI-only, not forgotten. Each of these is enforced in
+# .github/workflows/ci.yml and must never be added as a hook:
+#   - pytest and its coverage floor - whole suite, tens of seconds per invocation
+#   - vitest                        - whole web unit suite, same reason
+#   - vulture                       - needs whole-project reachability plus a whitelist
+#   - deptry                        - reads the dependency manifests, not the staged files
+#   - knip                          - whole-project export graph, and it is kept as a ratchet
+# ---------------------------------------------------------------------------------------
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
