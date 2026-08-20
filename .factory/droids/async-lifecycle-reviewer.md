@@ -80,16 +80,47 @@ here, because they are expensive to disprove.
 
 ## Output
 
-If you find no defect you can demonstrate with a concrete sequence, reply with exactly:
+Reply with one JSON object and nothing else. No prose before or after, no code fence.
 
-NO_FINDINGS
+```
+{
+  "comments": [
+    {
+      "path": "founding_team_analyzer/src/founding_team_analyzer/runs.py",
+      "line": 159,
+      "severity": "P1",
+      "title": "Awaiting each subscriber couples delivery to the slowest consumer",
+      "body": "`publish()` uses `put_nowait` so one stalled SSE client cannot block the others. Awaiting `q.put(event)` reintroduces that coupling: a client that stops reading halts the run's event fan-out for every other subscriber."
+    }
+  ],
+  "summary": "One lifecycle finding: awaited fan-out can stall on a dead consumer."
+}
+```
 
-Otherwise reply with GitHub-flavored markdown only, at most 3 findings, highest impact
-first, each in this shape:
+Rules for the fields:
 
-- **`path/to/file.py:LINE`** - the defect in one sentence, then the interleaving or
-  failure path that triggers it, then the fix. Keep the whole finding under 6 lines.
+- **At most 3 comments**, highest impact first. Never pad to reach three.
+- `path` is repository-relative, exactly as it appears in the diff.
+- `line` must be a line the diff actually **added or changed**, since that is where the
+  comment gets anchored. When the defect is a missing terminal publish on a path the diff
+  introduced, anchor to the `return` or `except` line that fails to publish.
+- `severity` is `P1` when a run can hang, leak, or never reach a terminal status, `P2`
+  when the effect is a recoverable inconsistency, `P3` for a latent risk that needs an
+  unlikely interleaving.
+- `title` is one imperative line, no trailing period.
+- `body` gives the defect, then the concrete interleaving or failure path that triggers
+  it, then the fix. Keep it under 6 lines. GitHub-flavored markdown is fine here.
+- `suggestion` is **optional** and usually wrong for this domain, because lifecycle fixes
+  span multiple lines: a missing terminal publish, a `try`/`finally`, a cancellation
+  guard. Include one only when the fix rewrites exactly the anchored line and applying it
+  alone, with no other edit, leaves the module correct and the tests green. Otherwise omit
+  it: a wrong suggestion is worse than none, because it is one click from being committed.
+- `summary` is one or two sentences, or `""` when there are no comments.
 
-End with a single line: `Verdict: N lifecycle finding(s)`
+If you find no defect you can demonstrate with a concrete sequence, return exactly:
+
+```
+{"comments": [], "summary": ""}
+```
 
 Do not comment on style, naming, formatting, or test coverage in general.
