@@ -1,9 +1,12 @@
 import json
+import math
 import os
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+
+from founding_team_analyzer.scoring import RUBRIC
 
 # Ensure server import sees test-friendly env values.
 os.environ.setdefault("OPENAI_API_KEY", "test-openai")
@@ -37,6 +40,19 @@ def test_health_endpoint(client):
     assert body["status"] == "ok"
     assert body["model_reasoning"]
     assert "reasoning_effort" in body
+
+
+def test_rubric_endpoint(client):
+    c, _ = client
+    r = c.get("/api/rubric")
+    assert r.status_code == 200
+    criteria = r.json()["criteria"]
+    assert len(criteria) == len(RUBRIC)
+    assert [it["key"] for it in criteria] == [rc.key for rc in RUBRIC]
+    assert math.isclose(sum(it["weight"] for it in criteria), 1.0, abs_tol=1e-6)
+    for it in criteria:
+        assert it["label"]
+        assert it["anchor_0"] and it["anchor_3"] and it["anchor_5"]
 
 
 def test_runs_list_empty(client):

@@ -2,6 +2,7 @@
 
 Endpoints:
     GET    /api/health                     -> liveness + model info
+    GET    /api/rubric                     -> house rubric criteria + weights
     POST   /api/analyze                    -> register a run, return {run_id, status}
     GET    /api/runs/{run_id}/events       -> SSE stream (replay + live) for a run
     GET    /api/runs/{run_id}              -> status + (if completed) full report
@@ -20,6 +21,7 @@ import asyncio
 import json
 import logging
 import uuid
+from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, AsyncIterator
@@ -31,6 +33,7 @@ from pydantic import BaseModel, Field
 
 from . import config as config_module
 from .runs import REGISTRY, RunRecord
+from .scoring import RUBRIC
 from .streaming_graph import stream_analysis
 from .tools.normalize import slugify
 
@@ -167,6 +170,13 @@ def create_app() -> FastAPI:
             "openai_configured": bool(s.openai_api_key),
             "tavily_configured": bool(s.tavily_api_key),
         }
+
+    @app.get("/api/rubric")
+    async def rubric() -> dict[str, Any]:
+        # The weights on a report's CriterionScore come from the LLM's
+        # structured output; compute_overall prefers the rubric weight for a
+        # known key, so this endpoint is the authoritative house weighting.
+        return {"criteria": [asdict(c) for c in RUBRIC]}
 
     @app.post("/api/analyze")
     async def analyze(req: AnalyzeRequest) -> dict[str, Any]:

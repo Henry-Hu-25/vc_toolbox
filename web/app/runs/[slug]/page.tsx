@@ -15,6 +15,7 @@ import { TierBadge } from "@/components/tier-badge";
 import { ScoreGauge } from "@/components/score-gauge";
 import { FounderCard } from "@/components/founder-card";
 import { OverlapTable } from "@/components/overlap-table";
+import { RubricSandbox } from "@/components/rubric-sandbox";
 import { CostLedger } from "@/components/cost-ledger";
 import { MarkdownReport } from "@/components/markdown-report";
 import { SiteHeader } from "@/components/site-header";
@@ -304,6 +305,10 @@ function ScoreSection({
         <Pill title="Risks" items={score.top_risks} variant="danger" />
         <Pill title="DD questions" items={score.open_questions} variant="info" />
       </div>
+      <RubricSandbox
+        criteria={score.criteria}
+        houseOverall={score.overall_0_100}
+      />
     </div>
   );
 }
