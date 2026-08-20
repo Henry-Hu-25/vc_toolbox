@@ -305,6 +305,7 @@ export const useRunStore = create<Store>()(
         warnings: state.warnings,
         error: state.error,
         slug: state.slug,
+        _hydrating: state._hydrating,
       }),
     },
   ),

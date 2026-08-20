@@ -156,6 +156,18 @@ class RunRegistry:
             except asyncio.QueueFull:  # pragma: no cover - unbounded queues
                 log.warning("dropping event for run %s: subscriber queue full", run_id)
 
+    async def broadcast_confirmed(self, run_id: str, event: dict[str, Any]) -> None:
+        """Fan an event out to live subscribers, waiting for each to accept it.
+
+        Used where a caller needs the event delivered before continuing.
+        """
+        rec = self._runs.get(run_id)
+        if rec is None:
+            return
+        rec.events.append(event)
+        for q in list(rec.subscribers):
+            await q.put(event)
+
     def mark_failed(self, run_id: str, message: str) -> None:
         rec = self._runs.get(run_id)
         if rec is None:
