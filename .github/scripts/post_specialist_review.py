@@ -169,6 +169,27 @@ def retract_prior_comments(repo: str, pr: int, token: str, droid: str) -> int:
             removed += 1
         except RuntimeError as exc:
             warn("Could not retract stale comment", f"{droid}: comment {cid}: {exc}")
+
+    # A PR first reviewed before this script existed still carries the issue-level sticky
+    # comment the old markdown path left behind. It sits on a different endpoint, so it
+    # would otherwise outlive the findings it describes indefinitely.
+    legacy = f"<!-- droid-specialist: {droid} -->"
+    page = 1
+    while page <= 10:
+        batch = api("GET", f"/repos/{repo}/issues/{pr}/comments?per_page=100&page={page}", token)
+        if not batch:
+            break
+        for c in batch:
+            if legacy not in (c.get("body") or ""):
+                continue
+            try:
+                api("DELETE", f"/repos/{repo}/issues/comments/{c['id']}", token)
+                removed += 1
+            except RuntimeError as exc:
+                warn("Could not retract legacy comment", f"{droid}: comment {c['id']}: {exc}")
+        if len(batch) < 100:
+            break
+        page += 1
     return removed
 
 
