@@ -11,8 +11,10 @@ Two constraints drive the design:
    that is not addressable in the diff. Every anchor is therefore validated against
    the diff hunks first, and anything unaddressable is demoted into the review body
    instead of being dropped or taking the review down with it.
-2. `synchronize` re-runs this on every push, so findings already posted are skipped
-   to keep a long-lived PR from accumulating the same comment repeatedly.
+2. `synchronize` re-runs this on every push, so each run first retracts the comments
+   its own droid left behind. Skipping duplicates by content was tried and failed:
+   between runs the model re-anchors the same defect to a different line and rewords
+   the title, so nothing matches.
 
 Stdlib only: this runs on a bare runner with no pip install step.
 """
@@ -49,7 +51,7 @@ def api(method: str, path: str, token: str, payload: dict | None = None):
     if data:
         req.add_header("Content-Type", "application/json")
     try:
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req, timeout=30) as resp:
             body = resp.read().decode()
             return json.loads(body) if body else {}
     except urllib.error.HTTPError as exc:
@@ -123,31 +125,39 @@ def build_body(finding: dict, droid: str) -> str:
     return "\n".join(parts).strip()
 
 
-def dedupe_key(path: str, line: int, title: str) -> str:
-    return f"{path}:{line}:{title.strip().lower()}"
+def marker_for(droid: str) -> str:
+    return f"<sub>specialist `{droid}`</sub>"
 
 
-def existing_keys(repo: str, pr: int, token: str, droid: str) -> set[str]:
-    """Keys for inline comments this droid already posted on the PR."""
-    keys: set[str] = set()
-    marker = f"<sub>specialist `{droid}`</sub>"
+def retract_prior_comments(repo: str, pr: int, token: str, droid: str) -> int:
+    """Delete inline comments this droid left earlier, so the PR shows one current set.
+
+    Content-based dedup was tried first and does not hold: across `synchronize` pushes
+    the model re-anchors the same defect to a different line and rephrases the title, so
+    no key built from path, line, or title matches its own previous run. Retracting and
+    reposting is the only version that stays stable, at the cost of dropping any reply
+    thread hanging off a superseded comment.
+    """
+    marker = marker_for(droid)
+    stale: list[int] = []
     page = 1
     while page <= 10:
         batch = api("GET", f"/repos/{repo}/pulls/{pr}/comments?per_page=100&page={page}", token)
         if not batch:
             break
-        for c in batch:
-            body = c.get("body") or ""
-            if marker not in body:
-                continue
-            m = re.search(r"\*\*\[P[123]\]\s*(.+?)\*\*", body)
-            title = m.group(1) if m else ""
-            line = c.get("line") or c.get("original_line") or 0
-            keys.add(dedupe_key(c.get("path", ""), line, title))
+        stale += [c["id"] for c in batch if marker in (c.get("body") or "")]
         if len(batch) < 100:
             break
         page += 1
-    return keys
+
+    removed = 0
+    for cid in stale:
+        try:
+            api("DELETE", f"/repos/{repo}/pulls/comments/{cid}", token)
+            removed += 1
+        except RuntimeError as exc:
+            warn("Could not retract stale comment", f"{droid}: comment {cid}: {exc}")
+    return removed
 
 
 def main() -> int:
@@ -182,23 +192,24 @@ def main() -> int:
     findings.sort(key=lambda f: SEVERITY_ORDER.get(str(f.get("severity", "P2")).upper(), 1))
     findings = findings[:MAX_COMMENTS]
 
+    # Retract first, even when clean: a defect fixed since the last push should take its
+    # comment with it rather than leaving a stale one anchored to vanished code.
+    try:
+        retracted = retract_prior_comments(repo, pr, token, droid)
+    except RuntimeError as exc:
+        warn("Retraction lookup failed", f"{droid}: {exc}")
+        retracted = 0
+
     if not findings:
-        print(f"{droid}: no findings; nothing to post.")
+        print(f"{droid}: no findings; retracted {retracted} stale comment(s).")
         print("status=clean")
         return 0
 
     with open(sys.argv[2], encoding="utf-8") as fh:
         anchorable = addressable_lines(fh.read())
 
-    try:
-        already = existing_keys(repo, pr, token, droid)
-    except RuntimeError as exc:
-        warn("Dedupe lookup failed", f"{droid}: {exc}")
-        already = set()
-
     inline: list[dict] = []
     demoted: list[str] = []
-    skipped = 0
 
     for f in findings:
         path = str(f.get("path", "")).strip()
@@ -207,11 +218,7 @@ def main() -> int:
         except (TypeError, ValueError):
             line = 0
         body = build_body(f, droid)
-        key = dedupe_key(path, line, str(f.get("title", "")))
 
-        if key in already:
-            skipped += 1
-            continue
         if path and line in anchorable.get(path, set()):
             inline.append({"path": path, "line": line, "side": "RIGHT", "body": body})
         else:
@@ -220,11 +227,6 @@ def main() -> int:
             reason = "path not in scoped diff" if path not in anchorable else "line not in a diff hunk"
             demoted.append(f"- `{path}:{line}` ({reason})\n\n{body}")
 
-    if not inline and not demoted:
-        print(f"{droid}: all {skipped} finding(s) already posted; nothing new.")
-        print("status=clean")
-        return 0
-
     summary = str(doc.get("summary", "")).strip()
     header = [f"### {title}", ""]
     if summary:
@@ -232,7 +234,7 @@ def main() -> int:
     header.append(
         f"{len(inline)} inline comment(s)"
         + (f", {len(demoted)} not anchorable" if demoted else "")
-        + (f", {skipped} already posted" if skipped else "")
+        + (f", replacing {retracted} from an earlier push" if retracted else "")
         + f" &middot; `{head_sha[:7]}`"
     )
     if demoted:
@@ -271,7 +273,7 @@ def main() -> int:
 
     print(
         f"{droid}: submitted review {review.get('id')} with {len(inline)} inline "
-        f"comment(s), {len(demoted)} demoted, {skipped} skipped as duplicates"
+        f"comment(s), {len(demoted)} demoted, {retracted} retracted"
     )
     print("status=findings")
     return 0
