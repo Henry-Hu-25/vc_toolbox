@@ -60,12 +60,11 @@ Reply with one JSON object and nothing else. No prose before or after, no code f
 {
   "comments": [
     {
-      "path": "web/lib/types.ts",
-      "line": 17,
+      "path": "founding_team_analyzer/src/founding_team_analyzer/schemas.py",
+      "line": 55,
       "severity": "P1",
-      "title": "Company is missing employee_count added on the backend",
-      "body": "`schemas.py` added `employee_count` but the mirrored interface was not updated, so `ReportPayload.company` now drifts across the boundary.",
-      "suggestion": "  employee_count: number | null;"
+      "title": "Company gained employee_count with no TypeScript mirror",
+      "body": "This field crosses the wire but `Company` in `web/lib/types.ts` was not updated, so `ReportPayload.company` drifts. Add `employee_count: number | null;` to that interface."
     }
   ],
   "summary": "One drift finding: Company lost mirror parity."
@@ -85,10 +84,13 @@ Rules for the fields:
 - `title` is one imperative line, no trailing period.
 - `body` states what drifted and the exact counterpart edit, naming the file, the field,
   and its concrete type. GitHub-flavored markdown is fine here.
-- `suggestion` is **optional**. Include it only when the fix replaces exactly the one
-  line you anchored to, and you can reproduce that line's full replacement text
-  including its original indentation. Omit it for any multi-line or cross-file fix.
-  A wrong suggestion is worse than none, because it is one click from being committed.
+- `suggestion` is **optional** and rarely applicable here. A suggestion can only ever
+  rewrite the single line you anchored to, in the file you anchored to, so it cannot
+  express "add a field to the other side of the boundary". Since almost every drift fix
+  lands in the file that did *not* change, **usually omit it**. Include one only when the
+  fix rewrites exactly the anchored line and applying it alone leaves both sides
+  consistent and the build green. A wrong suggestion is worse than none, because it is
+  one click from being committed.
 - `summary` is one or two sentences, or `""` when there are no comments.
 
 If every mirror in the diff is consistent, return exactly:

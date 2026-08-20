@@ -75,8 +75,7 @@ Reply with one JSON object and nothing else. No prose before or after, no code f
       "line": 308,
       "severity": "P1",
       "title": "Persisting _hydrating strands the race guard as permanently true",
-      "body": "`_hydrating` is a transient in-flight flag. Writing it to `localStorage` means a reload rehydrates it as `true`, so `hydrate()` can never win its race again and a resumed run stops updating.",
-      "suggestion": "        slug: state.slug,"
+      "body": "`_hydrating` is a transient in-flight flag. Writing it to `localStorage` means a reload rehydrates it as `true`, so `hydrate()` can never win its race again and a resumed run stops updating. Remove the field from the allowlist."
     }
   ],
   "summary": "One frontend finding: a transient flag entered the persistence allowlist."
@@ -95,11 +94,12 @@ Rules for the fields:
 - `title` is one imperative line, no trailing period.
 - `body` names the rule broken and the **user-visible symptom**: what the user does and
   what they see. Then the concrete fix. GitHub-flavored markdown is fine here.
-- `suggestion` is **optional**. Include it only when the fix replaces exactly the one line
-  you anchored to, and you can reproduce that line's full replacement text including its
-  original indentation. To suggest deleting a line, give the line that should replace it.
-  Omit it for any multi-line fix. A wrong suggestion is worse than none, because it is
-  one click from being committed.
+- `suggestion` is **optional** and must satisfy one test: applying it on its own, with no
+  other edit, leaves the file correct and `tsc` green. **When the fix is to delete the
+  anchored line, omit the suggestion entirely** and say so in the body. Repeating a
+  neighbouring line does not delete anything, it produces a duplicate key that fails the
+  typecheck. Omit it for any multi-line fix. A wrong suggestion is worse than none,
+  because it is one click from being committed.
 - `summary` is one or two sentences, or `""` when there are no comments.
 
 If the diff breaks none of these rules, return exactly:
