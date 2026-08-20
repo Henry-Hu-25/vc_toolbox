@@ -174,9 +174,42 @@ jobs:
 
       - name: Install Droid CLI
         if: matrix.in_scope == 'true' && steps.diff.outputs.empty == 'false'
+        env:
+          # Pinned release, with the expected digests recorded here rather than fetched.
+          # The vendor installer pipes a remote script into sh and then checks the binary
+          # against a checksum served by the same host, so whoever controls that host
+          # controls both halves. This job holds pull-requests: write and FACTORY_API_KEY,
+          # so the digest lives in git instead and changes only through a reviewed commit.
+          # Verified against the published artifact on 2026-08-20.
+          DROID_VERSION: "0.200.0"
+          SHA256_X64: "b62cd8825e87f2520837512ce9cf90a0f6f470bf6f11ab3cc50da8334427fbd3"
+          SHA256_X64_BASELINE: "f22e84d8405a79f65b1190f5ce5fd8f6ffab70b6e3675f4fc10828de0cf9fb82"
         run: |
           set -euo pipefail
-          curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL https://app.factory.ai/cli | sh
+
+          # The vendor installer drops to the baseline build when the CPU lacks AVX2, and
+          # the two builds have different digests, so the same choice has to be made here
+          # before picking which digest to require.
+          if grep -qi avx2 /proc/cpuinfo 2>/dev/null; then
+            arch="x64"
+            expected="$SHA256_X64"
+          else
+            arch="x64-baseline"
+            expected="$SHA256_X64_BASELINE"
+          fi
+
+          dest="$RUNNER_TEMP/droid"
+          curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o "$dest" \
+            "https://downloads.factory.ai/factory-cli/releases/$DROID_VERSION/linux/$arch/droid"
+
+          actual="$(sha256sum "$dest" | awk '{print $1}')"
+          if [ "$actual" != "$expected" ]; then
+            echo "::error title=Droid CLI checksum mismatch::$arch v$DROID_VERSION expected $expected but got $actual. Refusing to run an unverified binary."
+            exit 1
+          fi
+
+          mkdir -p "$HOME/.local/bin"
+          install -m 0755 "$dest" "$HOME/.local/bin/droid"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           "$HOME/.local/bin/droid" --version
 
